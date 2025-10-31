@@ -8,6 +8,9 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
+  <!-- NEW: Confetti CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  
   <!-- Custom Tailwind Config -->
   <script>
     tailwind.config = {
@@ -40,6 +43,21 @@
     /* Custom loader */
     .loader {
       border-top-color: transparent;
+    }
+
+    /* Custom styles for quiz answer feedback */
+    .quiz-option.correct {
+      background-color: #dcfce7; /* green-100 */
+      border-color: #22c55e; /* green-500 */
+      color: #166534; /* green-800 */
+    }
+    .quiz-option.incorrect {
+      background-color: #fee2e2; /* red-100 */
+      border-color: #ef4444; /* red-500 */
+      color: #991b1b; /* red-800 */
+    }
+    .quiz-option:disabled {
+      opacity: 1;
     }
   </style>
 </head>
@@ -120,6 +138,8 @@
     const IconPublic = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c.24 0 .477-.007.71-.021M12 21c-.24 0-.477-.007-.71-.021M12 15a3.75 3.75 0 003.75-3.75V8.25A3.75 3.75 0 0012 4.5v.001M12 15a3.75 3.75 0 01-3.75-3.75V8.25A3.75 3.75 0 0112 4.5v.001M12 15v.001M12 4.5v.001m0 0v.001m0 0h.001M12 15h.001M12 4.5h.001M12 3c-1.928 0-3.69.784-4.95 2.05S4.5 8.072 4.5 10v.75a8.217 8.217 0 004.22 7.029c.465.253.96.442 1.48.59M12 3c1.928 0 3.69.784 4.95 2.05S19.5 8.072 19.5 10v.75a8.217 8.217 0 01-4.22 7.029c-.465.253-.96.442-1.48.59M12 3v.001" /></svg>`;
     const IconPrivate = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>`;
     const IconAI = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 21.75l-.648-1.188a2.25 2.25 0 00-1.579-1.579L12.75 18.25l1.188-.648a2.25 2.25 0 001.579-1.579L16.25 15l.648 1.188a2.25 2.25 0 001.579 1.579L19.75 18.25l-1.188.648a2.25 2.25 0 00-1.579 1.579z" /></svg>`;
+    // NEW: Quiz Icon
+    const IconQuiz = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
     
     // --- GLOBAL STATE ---
     let currentUser = null;
@@ -147,8 +167,17 @@
         // Auth listener will handle navigation
       } catch (error) {
         console.error("Error signing out:", error);
-        alert("Error signing out: " + error.message);
+        // Use a simple custom modal or message for errors
+        showMessage("Error signing out: " + error.message);
       }
+    }
+    
+    // --- UTILITIES ---
+    function showMessage(message, type = 'error') {
+      // This is a simple alert replacement.
+      // For a real app, you'd build a modal.
+      console.log(`[Message]: ${message} (Type: ${type})`);
+      alert(message); // Using alert as a placeholder for the requested modal
     }
 
     // --- RENDER FUNCTIONS ---
@@ -192,6 +221,10 @@
         case 'study':
           mainContent.innerHTML = StudyPageHTML(); // This is just a loader
           break;
+        // NEW: Quiz Case
+        case 'quiz':
+          mainContent.innerHTML = QuizPageHTML(); // This is just a loader
+          break;
       }
       
       // 2. Append the HTML to the DOM
@@ -223,6 +256,10 @@
           break;
         case 'study':
           fetchStudySet(); // This function finds elements and *then* fetches
+          break;
+        // NEW: Quiz Case
+        case 'quiz':
+          fetchQuizSet(); // This function finds elements and *then* fetches
           break;
       }
     }
@@ -339,6 +376,8 @@
     function attachAuthListeners() {
       let isLogin = true;
       const form = document.getElementById('auth-form');
+      if (!form) return; // Guard clause
+      
       const emailEl = document.getElementById('email');
       const passwordEl = document.getElementById('password');
       const errorEl = document.getElementById('auth-error');
@@ -434,6 +473,7 @@
     function SetCardHTML(id, set, isPublicSearch = false) {
       const cardCount = set.cards ? set.cards.length : 0;
       const isOwner = currentUser && set.ownerId === currentUser.uid;
+      const canQuiz = cardCount >= 4;
       
       return `
         <div 
@@ -462,20 +502,27 @@
           <div class="bg-gray-50 p-4 flex justify-end space-x-2">
             ${!isPublicSearch && isOwner ? `
               <button
-                class="set-card-button"
+                class="set-card-button inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 data-action="edit"
                 data-id="${id}"
-                class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
                 ${IconEdit} <span class="ml-2">Edit</span>
               </button>` : ''
             }
             <button
-              class="set-card-button"
+              class="set-card-button inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 ${!canQuiz ? 'opacity-50 cursor-not-allowed' : ''}"
+              data-action="quiz"
+              data-id="${id}"
+              data-count="${cardCount}"
+              title="${!canQuiz ? 'Needs at least 4 cards for a quiz' : 'Practice Quiz'}"
+            >
+              ${IconQuiz} <span class="ml-2">Quiz</span>
+            </button>
+            <button
+              class="set-card-button inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 ${cardCount === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
               data-action="study"
               data-id="${id}"
               data-count="${cardCount}"
-              class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 ${cardCount === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
             >
               Study
             </button>
@@ -507,9 +554,15 @@
           const id = button.dataset.id;
           if (action === 'edit') {
             navigate('edit', id);
+          } else if (action === 'quiz') {
+            if (button.dataset.count < 4) {
+              showMessage("You need at least 4 cards in a set to start a quiz.");
+            } else {
+              navigate('quiz', id);
+            }
           } else if (action === 'study') {
             if (button.dataset.count === "0") {
-              alert("This set has no cards! Add cards to study.");
+              showMessage("This set has no cards! Add cards to study.");
             } else {
               navigate('study', id);
             }
@@ -709,7 +762,7 @@
         if (e.target.closest('.remove-card-button')) {
           const cardEntries = document.querySelectorAll('.card-entry');
           if (cardEntries.length <= 1) {
-            alert("You must have at least one card.");
+            showMessage("You must have at least one card.");
             return;
           }
           e.target.closest('.card-entry').remove();
@@ -927,6 +980,16 @@
                 </div>
               </div>
             `;
+            
+            // NEW: Trigger confetti!
+            if (typeof confetti === 'function') {
+              confetti({
+                particleCount: 150,
+                spread: 100,
+                origin: { y: 0.6 }
+              });
+            }
+            
             document.getElementById('restart-button').addEventListener('click', () => {
                 currentIndex = 0;
                 isFlipped = false;
@@ -1042,7 +1105,7 @@
       
       const filteredSets = sets.filter(set => 
         set.title.toLowerCase().includes(lowerSearchTerm) ||
-        set.description.toLowerCase().includes(lowerSearchTerm)
+        (set.description && set.description.toLowerCase().includes(lowerSearchTerm))
       );
       
       if (filteredSets.length === 0) {
@@ -1149,7 +1212,7 @@
         
         uploadTask.on('state_changed',
           (snapshot) => {
-            const progress = (snapshot.bytesTransactionsferred / snapshot.totalBytes) * 100;
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
             progressBar.style.width = `${progress}%`;
             messageEl.textContent = `Uploading: ${Math.round(progress)}%`;
             messageEl.className = 'mt-4 text-sm text-blue-600';
@@ -1174,6 +1237,189 @@
       });
     }
 
+    // --- NEW: QUIZ PAGE ---
+    
+    /**
+     * Utility function to shuffle an array
+     */
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+    
+    function QuizPageHTML() {
+      // Just a loader, content will be filled by fetchQuizSet
+      return `
+        <div id="quiz-page-container" class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <p>Loading quiz...</p>
+        </div>
+      `;
+    }
+    
+    function fetchQuizSet() {
+      const container = document.getElementById('quiz-page-container');
+      
+      getDoc(doc(db, "studySets", currentSetId)).then(docSnap => {
+        if (!docSnap.exists()) {
+          container.innerHTML = `<p class="text-red-600">Quiz set not found.</p>`;
+          return;
+        }
+        
+        const set = docSnap.data();
+        if (!set.cards || set.cards.length < 4) {
+            container.innerHTML = `<p class="text-red-600">This set needs at least 4 cards for a quiz.</p>`;
+            return;
+        }
+        
+        let quizQuestions = shuffleArray([...set.cards]);
+        let currentIndex = 0;
+        let score = 0;
+        let answered = false;
+        
+        function renderQuizUI() {
+          const currentCard = quizQuestions[currentIndex];
+          const progressPercent = ((currentIndex + 1) / quizQuestions.length) * 100;
+          
+          // --- Generate Options ---
+          const correctAnswer = currentCard.definition;
+          // Get all *other* definitions
+          const incorrectOptions = quizQuestions
+            .filter(card => card.term !== currentCard.term)
+            .map(card => card.definition);
+          
+          // Shuffle and pick 3 incorrect options
+          const finalIncorrectOptions = shuffleArray(incorrectOptions).slice(0, 3);
+          
+          // Combine and shuffle final options
+          const options = shuffleArray([correctAnswer, ...finalIncorrectOptions]);
+          
+          // --- Render HTML ---
+          container.innerHTML = `
+            <button data-page="dashboard" class="nav-button flex items-center text-blue-600 hover:underline mb-4">
+              ${IconBack} <span class="ml-1">Back to Dashboard</span>
+            </button>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">${set.title} - Quiz</h1>
+            <p class="text-lg text-gray-600 mb-2">Question ${currentIndex + 1} / ${quizQuestions.length}</p>
+            <p class="text-lg text-blue-600 font-semibold mb-6">Score: ${score}</p>
+
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+              <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progressPercent}%;"></div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-xl p-8 mb-6">
+              <p class="text-sm font-medium text-gray-500 mb-2">TERM:</p>
+              <h2 class="text-3xl font-semibold text-gray-900 text-center">${currentCard.term}</h2>
+            </div>
+            
+            <p class="text-sm font-medium text-gray-500 mb-2">Choose the correct definition:</p>
+            <div id="options-container" class="space-y-4">
+              ${options.map((option, index) => `
+                <button
+                  class="quiz-option w-full p-4 bg-white rounded-lg shadow border border-gray-200 text-left text-gray-800 hover:bg-gray-50 transition-colors"
+                  data-answer="${option === correctAnswer ? 'correct' : 'incorrect'}"
+                >
+                  <span classclass="font-mono text-xs mr-3">${String.fromCharCode(65 + index)}.</span>
+                  ${option}
+                </button>
+              `).join('')}
+            </div>
+            
+            <button
+              id="next-quiz-button"
+              class="hidden w-full mt-8 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            >
+              ${currentIndex === quizQuestions.length - 1 ? 'Finish Quiz' : 'Next Question'}
+            </button>
+          `;
+          
+          // --- Attach Listeners ---
+          container.querySelector('.nav-button').addEventListener('click', () => navigate('dashboard'));
+          
+          document.querySelectorAll('.quiz-option').forEach(button => {
+            button.addEventListener('click', handleAnswer);
+          });
+          
+          document.getElementById('next-quiz-button').addEventListener('click', nextQuestion);
+        }
+        
+        function handleAnswer(e) {
+          if (answered) return;
+          answered = true;
+          
+          const clickedButton = e.currentTarget;
+          const isCorrect = clickedButton.dataset.answer === 'correct';
+          
+          if (isCorrect) {
+            score++;
+            clickedButton.classList.add('correct');
+          } else {
+            clickedButton.classList.add('incorrect');
+            // Also show the correct one
+            document.querySelector('[data-answer="correct"]').classList.add('correct');
+          }
+          
+          // Disable all buttons
+          document.querySelectorAll('.quiz-option').forEach(button => {
+            button.disabled = true;
+          });
+          
+          // Show 'Next' button
+          document.getElementById('next-quiz-button').classList.remove('hidden');
+        }
+        
+        function nextQuestion() {
+          answered = false;
+          if (currentIndex < quizQuestions.length - 1) {
+            currentIndex++;
+            renderQuizUI();
+          } else {
+            showQuizCompletionModal();
+          }
+        }
+        
+        function showQuizCompletionModal() {
+            const finalScore = (score / quizQuestions.length) * 100;
+            container.innerHTML = `
+              <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+                  <h3 class="text-2xl font-bold text-gray-900">Quiz Complete!</h3>
+                  <p class="mt-4 text-4xl font-bold text-blue-600">${finalScore.toFixed(0)}%</p>
+                  <p class="mt-2 text-lg text-gray-600">You got ${score} out of ${quizQuestions.length} correct.</p>
+                  <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                    <button id="restart-button" class="px-6 py-3 bg-blue-600 border rounded-md text-base font-medium text-white hover:bg-blue-700">Take Quiz Again</button>
+                    <button id="dashboard-button" class="px-6 py-3 bg-white border border-gray-300 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">Back to Dashboard</button>
+                  </div>
+                </div>
+              </div>
+            `;
+            
+            // Trigger confetti!
+            if (typeof confetti === 'function') {
+              confetti({ particleCount: 150, spread: 100, origin: { y: 0.6 } });
+            }
+            
+            document.getElementById('restart-button').addEventListener('click', () => {
+                quizQuestions = shuffleArray([...set.cards]);
+                currentIndex = 0;
+                score = 0;
+                answered = false;
+                renderQuizUI();
+            });
+            document.getElementById('dashboard-button').addEventListener('click', () => navigate('dashboard'));
+        }
+        
+        // Start the quiz
+        renderQuizUI();
+        
+      }).catch(err => {
+        console.error("Error fetching set:", err);
+        container.innerHTML = `<p class="text-red-600">Failed to load quiz.</p>`;
+      });
+    }
+
     // --- APP ENTRY POINT ---
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -1192,4 +1438,5 @@
   </script>
 </body>
 </html>
+
 
