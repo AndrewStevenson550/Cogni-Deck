@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CogniDeck</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Custom Tailwind Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+  
+  <!-- Google Font (Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Custom CSS for Flip Animation -->
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Styles for 3D flip */
+    .perspective-1000 { perspective: 1000px; }
+    .transform-style-3d { transform-style: preserve-3d; }
+    .rotate-y-180 { transform: rotateY(180deg); }
+    .backface-hidden { backface-visibility: hidden; }
+    
+    /* Custom loader */
+    .loader {
+      border-top-color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+
+  <!-- Main application root -->
+  <div id="app-root">
+    <!-- App content will be rendered here by JavaScript -->
+    <div class="flex items-center justify-center h-screen bg-white">
+      <div class="flex flex-col items-center">
+        <div class="w-16 h-16 border-4 border-blue-500 rounded-full animate-spin loader"></div>
+        <p class="mt-4 text-lg font-semibold text-gray-700">Loading CogniDeck...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script type="module">
+    // --- FIREBASE IMPORTS ---
+    import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import {
+      getAuth,
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      signOut,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      addDoc,
+      doc,
+      getDoc,
+      getDocs,
+      updateDoc,
+      deleteDoc,
+      query,
+      where,
+      onSnapshot,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import {
+      getStorage,
+      ref,
+      uploadBytesResumable,
+      getDownloadURL
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+    // --- FIREBASE CONFIG ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyDaTxyHz5dr4aWCE4tAiql4jJ4ImrrJKQM",
+      authDomain: "quizlet-type-app.firebaseapp.com",
+      projectId: "quizlet-type-app",
+      storageBucket: "quizlet-type-app.firebasestorage.app",
+      messagingSenderId: "829739254487",
+      appId: "1:829739254487:web:457ffc620af28c96f8a692"
+    };
+
+    // --- INITIALIZE FIREBASE ---
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    setLogLevel('Debug');
+
+    // --- SVG ICONS (as string constants) ---
+    const IconHome = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>`;
+    const IconSearch = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>`;
+    const IconUpload = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>`;
+    const IconPlus = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>`;
+    const IconLogout = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" /></svg>`;
+    const IconTrash = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.502 0c.342.052.682.107 1.022.166m11.48 0c.342.052.682.107 1.022.166M4.772 5.79L4.772 5.79m14.456 0l-2.81-2.98m-11.48 0l2.81 2.98m0 0l-2.81 2.98m11.48 0l2.81 2.98" /></svg>`;
+    const IconEdit = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>`;
+    const IconBack = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>`;
+    const IconFlip = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0 0v-4.992m0 0h-4.992" /></svg>`;
+    const IconNext = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>`;
+    const IconPrev = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>`;
+    const IconPublic = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c.24 0 .477-.007.71-.021M12 21c-.24 0-.477-.007-.71-.021M12 15a3.75 3.75 0 003.75-3.75V8.25A3.75 3.75 0 0012 4.5v.001M12 15a3.75 3.75 0 01-3.75-3.75V8.25A3.75 3.75 0 0112 4.5v.001M12 15v.001M12 4.5v.001m0 0v.001m0 0h.001M12 15h.001M12 4.5h.001M12 3c-1.928 0-3.69.784-4.95 2.05S4.5 8.072 4.5 10v.75a8.217 8.217 0 004.22 7.029c.465.253.96.442 1.48.59M12 3c1.928 0 3.69.784 4.95 2.05S19.5 8.072 19.5 10v.75a8.217 8.217 0 01-4.22 7.029c-.465.253-.96.442-1.48.59M12 3v.001" /></svg>`;
+    const IconPrivate = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>`;
+    const IconAI = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 21.75l-.648-1.188a2.25 2.25 0 00-1.579-1.579L12.75 18.25l1.188-.648a2.25 2.25 0 001.579-1.579L16.25 15l.648 1.188a2.25 2.25 0 001.579 1.579L19.75 18.25l-1.188.648a2.25 2.25 0 00-1.579 1.579z" /></svg>`;
+    
+    // --- GLOBAL STATE ---
+    let currentUser = null;
+    let currentPage = 'auth';
+    let currentSetId = null;
+    let currentUnsubscribe = null; // To stop real-time listeners
+
+    const appRoot = document.getElementById('app-root');
+
+    // --- NAVIGATION ---
+    function navigate(page, setId = null) {
+      if (currentUnsubscribe) {
+        currentUnsubscribe(); // Stop any active listeners
+        currentUnsubscribe = null;
+      }
+      currentPage = page;
+      currentSetId = setId;
+      render();
+    }
+
+    // --- SIGN OUT ---
+    async function handleSignOut() {
+      try {
+        await signOut(auth);
+        // Auth listener will handle navigation
+      } catch (error) {
+        console.error("Error signing out:", error);
+        alert("Error signing out: " + error.message);
+      }
+    }
+
+    // --- RENDER FUNCTIONS ---
+    
+    /**
+     * Main render function that acts as a router
+     */
+    function render() {
+      // Clear the app root
+      appRoot.innerHTML = '';
+      
+      // Render Navbar (if logged in)
+      if (currentUser && currentPage !== 'auth') {
+        appRoot.innerHTML += NavbarHTML(currentUser, currentPage);
+      }
+      
+      // Render main page content
+      const mainContent = document.createElement('main');
+      mainContent.className = 'pt-16'; // Offset for fixed navbar
+      
+      // 1. Set the HTML
+      switch (currentPage) {
+        case 'auth':
+          mainContent.innerHTML = AuthPageHTML();
+          break;
+        case 'dashboard':
+          mainContent.innerHTML = DashboardHTML();
+          break;
+        case 'search':
+          mainContent.innerHTML = SearchPageHTML();
+          break;
+        case 'upload':
+          mainContent.innerHTML = UploadPageHTML();
+          break;
+        case 'create':
+          mainContent.innerHTML = SetEditorHTML();
+          break;
+        case 'edit':
+          mainContent.innerHTML = SetEditorHTML(currentSetId);
+          break;
+        case 'study':
+          mainContent.innerHTML = StudyPageHTML(); // This is just a loader
+          break;
+      }
+      
+      // 2. Append the HTML to the DOM
+      appRoot.appendChild(mainContent);
+      
+      // 3. Attach listeners *after* elements are in the DOM
+      if (currentUser && currentPage !== 'auth') {
+        attachNavbarListeners();
+      }
+
+      switch (currentPage) {
+        case 'auth':
+          attachAuthListeners(); // Now it's safe
+          break;
+        case 'dashboard':
+          fetchDashboardSets(); // This function finds elements and *then* fetches
+          break;
+        case 'search':
+          attachSearchListeners(); // Now it's safe
+          break;
+        case 'upload':
+          attachUploadListeners(); // Now it's safe
+          break;
+        case 'create':
+          attachSetEditorListeners(); // Now it's safe
+          break;
+        case 'edit':
+          attachSetEditorListeners(currentSetId); // Now it's safe
+          break;
+        case 'study':
+          fetchStudySet(); // This function finds elements and *then* fetches
+          break;
+      }
+    }
+
+    // --- NAVBAR ---
+    function NavbarHTML(user, page) {
+      const NavButton = (navPage, icon, label) => `
+        <button
+          data-page="${navPage}"
+          class="nav-button flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium ${
+            page === navPage
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-700 hover:bg-blue-100 hover:text-blue-700'
+          }"
+        >
+          ${icon}
+          <span>${label}</span>
+        </button>
+      `;
+      
+      return `
+        <nav class="fixed top-0 left-0 right-0 bg-white shadow-md z-50">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+              <div class="flex-shrink-0 flex items-center cursor-pointer" data-page="dashboard">
+                <span class="text-2xl font-bold text-blue-600">CogniDeck</span>
+              </div>
+              <div class="hidden md:flex md:items-center md:space-x-4">
+                ${NavButton('dashboard', IconHome, 'Home')}
+                ${NavButton('search', IconSearch, 'Search')}
+                ${NavButton('upload', IconUpload, 'Import')}
+                <button
+                  data-page="create"
+                  class="nav-button ml-4 flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  ${IconPlus}
+                  <span class="ml-2">Create Set</span>
+                </button>
+              </div>
+              <div class="hidden md:flex items-center space-x-3">
+                 <span class="text-sm text-gray-600 hidden lg:block">${user.email}</span>
+                 <button
+                  id="sign-out-button"
+                  class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                  title="Sign Out"
+                >
+                  ${IconLogout}
+                </button>
+              </div>
+              <!-- Mobile menu button (simplified) -->
+              <div class="md:hidden flex items-center">
+                <button id="mobile-menu-button" class="p-2 rounded-md text-gray-600">
+                  <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Mobile Menu (hidden by default, JS can show it) -->
+        </nav>
+      `;
+    }
+    
+    function attachNavbarListeners() {
+      document.getElementById('sign-out-button').addEventListener('click', handleSignOut);
+      document.querySelectorAll('.nav-button').forEach(button => {
+        button.addEventListener('click', () => {
+          navigate(button.dataset.page);
+        });
+      });
+      document.querySelector('[data-page="dashboard"]').addEventListener('click', () => navigate('dashboard'));
+      // Add mobile menu logic here if needed
+    }
+    
+    // --- AUTH PAGE ---
+    function AuthPageHTML() {
+      return `
+        <div class="flex items-center justify-center min-h-screen -mt-16 bg-gray-100">
+          <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-xl">
+            <h2 class="text-3xl font-bold text-center text-gray-900">
+              Welcome to <span class="text-blue-600">CogniDeck</span>
+            </h2>
+            <form class="space-y-6" id="auth-form">
+              <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
+                <input id="email" name="email" type="email" autocomplete="email" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+              </div>
+              <div>
+                <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" />
+              </div>
+              <p id="auth-error" class="text-sm text-red-600"></p>
+              <button
+                type="submit"
+                id="auth-submit-button"
+                class="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                Log In
+              </button>
+            </form>
+            <p class="text-sm text-center text-gray-600">
+              <span id="auth-toggle-text">Don't have an account?</span>
+              <button
+                id="auth-toggle-button"
+                class="ml-1 font-medium text-blue-600 hover:text-blue-500"
+              >
+                Sign Up
+              </button>
+            </p>
+          </div>
+        </div>
+      `;
+    }
+    
+    function attachAuthListeners() {
+      let isLogin = true;
+      const form = document.getElementById('auth-form');
+      const emailEl = document.getElementById('email');
+      const passwordEl = document.getElementById('password');
+      const errorEl = document.getElementById('auth-error');
+      const submitButton = document.getElementById('auth-submit-button');
+      const toggleButton = document.getElementById('auth-toggle-button');
+      const toggleText = document.getElementById('auth-toggle-text');
+
+      toggleButton.addEventListener('click', () => {
+        isLogin = !isLogin;
+        submitButton.textContent = isLogin ? 'Log In' : 'Sign Up';
+        toggleText.textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
+        toggleButton.textContent = isLogin ? 'Sign Up' : 'Log In';
+        errorEl.textContent = '';
+      });
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        submitButton.disabled = true;
+        submitButton.textContent = isLogin ? 'Logging in...' : 'Signing up...';
+        errorEl.textContent = '';
+        
+        try {
+          if (isLogin) {
+            await signInWithEmailAndPassword(auth, emailEl.value, passwordEl.value);
+          } else {
+            await createUserWithEmailAndPassword(auth, emailEl.value, passwordEl.value);
+          }
+          // Auth listener will handle navigation
+        } catch (err) {
+          errorEl.textContent = err.message;
+        } finally {
+          submitButton.disabled = false;
+          submitButton.textContent = isLogin ? 'Log In' : 'Sign Up';
+        }
+      });
+    }
+
+    // --- DASHBOARD ---
+    function DashboardHTML() {
+      return `
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <h1 class="text-3xl font-bold text-gray-900 mb-6">Your Study Sets</h1>
+          <div id="dashboard-content">
+            <p>Loading your sets...</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    function fetchDashboardSets() {
+      if (!currentUser) return;
+      
+      const contentEl = document.getElementById('dashboard-content');
+      const setsCollection = collection(db, "studySets");
+      const q = query(setsCollection, where("ownerId", "==", currentUser.uid));
+
+      currentUnsubscribe = onSnapshot(q, (querySnapshot) => {
+        if (querySnapshot.empty) {
+          contentEl.innerHTML = `
+            <div class="text-center p-12 bg-white rounded-lg shadow">
+              <h3 class="text-xl font-medium text-gray-800">No sets yet!</h3>
+              <p class="text-gray-600 mt-2 mb-4">Create a set manually or import a document to get started.</p>
+              <button
+                data-page="create"
+                class="nav-button inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+              >
+                ${IconPlus}
+                <span class="ml-2">Create New Set</span>
+              </button>
+            </div>
+          `;
+          // Re-attach listener since we overwrote the old button
+          contentEl.querySelector('.nav-button').addEventListener('click', () => navigate('create'));
+          return;
+        }
+        
+        let setsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
+        querySnapshot.forEach((doc) => {
+          setsHTML += SetCardHTML(doc.id, doc.data());
+        });
+        setsHTML += '</div>';
+        contentEl.innerHTML = setsHTML;
+        
+        // Attach listeners to all new cards
+        attachSetCardListeners();
+        
+      }, (err) => {
+        console.error("Error fetching sets:", err);
+        contentEl.innerHTML = `<p class="text-red-600">Failed to load your study sets. Please try again later.</p>`;
+      });
+    }
+    
+    function SetCardHTML(id, set, isPublicSearch = false) {
+      const cardCount = set.cards ? set.cards.length : 0;
+      const isOwner = currentUser && set.ownerId === currentUser.uid;
+      
+      return `
+        <div 
+          class="set-card bg-white rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl cursor-pointer flex flex-col justify-between"
+          data-id="${id}"
+          data-action="${isPublicSearch ? 'study' : (isOwner ? 'edit' : 'study')}"
+        >
+          <div class="p-6">
+            <div class="flex justify-between items-start">
+              <h3 class="text-xl font-semibold text-gray-900 mb-2">${set.title}</h3>
+              ${set.isPublic ? `
+                <div class="flex items-center text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">
+                  ${IconPublic} <span class="ml-1">Public</span>
+                </div>` : 
+                (isOwner ? `
+                <div class="flex items-center text-xs text-red-600 bg-red-100 px-2 py-1 rounded-full">
+                  ${IconPrivate} <span class="ml-1">Private</span>
+                </div>` : '')
+              }
+            </div>
+            <p class="text-gray-600 text-sm mb-4 line-clamp-2">${set.description || "No description."}</p>
+            <p class="text-sm text-gray-500">${cardCount} ${cardCount === 1 ? 'card' : 'cards'}</p>
+            ${isPublicSearch && set.ownerEmail ? `<p class="text-sm text-gray-500 mt-1">By: ${set.ownerEmail}</p>` : ''}
+          </div>
+          
+          <div class="bg-gray-50 p-4 flex justify-end space-x-2">
+            ${!isPublicSearch && isOwner ? `
+              <button
+                class="set-card-button"
+                data-action="edit"
+                data-id="${id}"
+                class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+              >
+                ${IconEdit} <span class="ml-2">Edit</span>
+              </button>` : ''
+            }
+            <button
+              class="set-card-button"
+              data-action="study"
+              data-id="${id}"
+              data-count="${cardCount}"
+              class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 ${cardCount === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+            >
+              Study
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    function attachSetCardListeners() {
+      document.querySelectorAll('.set-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          // Don't trigger if a button inside was clicked
+          if (e.target.closest('button')) return;
+          
+          const action = card.dataset.action;
+          const id = card.dataset.id;
+          if (action === 'edit') {
+            navigate('edit', id);
+          } else {
+            navigate('study', id);
+          }
+        });
+      });
+      
+      document.querySelectorAll('.set-card-button').forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent card click
+          const action = button.dataset.action;
+          const id = button.dataset.id;
+          if (action === 'edit') {
+            navigate('edit', id);
+          } else if (action === 'study') {
+            if (button.dataset.count === "0") {
+              alert("This set has no cards! Add cards to study.");
+            } else {
+              navigate('study', id);
+            }
+          }
+        });
+      });
+    }
+    
+    // --- SET EDITOR ---
+    function SetEditorHTML(setId = null) {
+      return `
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <button data-page="dashboard" class="nav-button flex items-center text-blue-600 hover:underline mb-4">
+            ${IconBack} <span class="ml-1">Back to Dashboard</span>
+          </button>
+          
+          <form id="set-editor-form" class="bg-white p-6 md:p-8 rounded-lg shadow-xl">
+            <h1 class="text-3xl font-bold text-gray-900 mb-6">${setId ? 'Edit Study Set' : 'Create New Study Set'}</h1>
+            
+            <div id="form-content" class="space-y-6">
+              <!-- Loader -->
+              <p id="form-loader" class="${setId ? 'block' : 'hidden'}">Loading set details...</p>
+              
+              <!-- Content will be injected here by JS -->
+
+            </div>
+            
+            <p id="form-error" class="text-red-600 mt-4"></p>
+            
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between mt-8 border-t border-gray-200 pt-6">
+              <div>
+                ${setId ? `
+                  <button
+                    type="button"
+                    id="delete-set-button"
+                    class="text-sm font-medium text-red-600 hover:text-red-800"
+                  >
+                    Delete Set
+                  </button>` : ''
+                }
+              </div>
+              <button
+                type="submit"
+                id="form-submit-button"
+                disabled
+                class="px-6 py-2 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                ${setId ? 'Update Set' : 'Create Set'}
+              </button>
+            </div>
+          </form>
+          
+          <!-- Delete Confirmation Modal -->
+          <div id="delete-confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+              <h3 class="text-lg font-medium text-gray-900">Delete Study Set?</h3>
+              <p class="mt-2 text-sm text-gray-600">Are you sure? This action cannot be undone.</p>
+              <div class="mt-6 flex justify-end space-x-3">
+                <button type="button" id="delete-cancel-button" class="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="button" id="delete-confirm-button" class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    function renderSetEditorForm(data = { title: '', description: '', isPublic: false, cards: [{ term: '', definition: '' }] }) {
+      document.getElementById('form-loader').classList.add('hidden');
+      
+      let cardsHTML = '';
+      data.cards.forEach((card, index) => {
+        cardsHTML += `
+          <div class="card-entry grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-gray-200 rounded-lg">
+            <div>
+              <label class="block text-xs font-medium text-gray-600">Term</label>
+              <input
+                type="text"
+                class="card-term w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Term"
+                value="${card.term.replace(/"/g, '&quot;')}"
+              />
+            </div>
+            <div class="flex">
+              <div class="flex-grow">
+                <label class="block text-xs font-medium text-gray-600">Definition</label>
+                <input
+                  type="text"
+                  class="card-definition w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Definition"
+                  value="${card.definition.replace(/"/g, '&quot;')}"
+                />
+              </div>
+              <button
+                type="button"
+                class="remove-card-button ml-2 mt-6 p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full h-10 w-10 flex items-center justify-center"
+                title="Delete card"
+              >
+                ${IconTrash}
+              </button>
+            </div>
+          </div>
+        `;
+      });
+      
+      document.getElementById('form-content').innerHTML = `
+        <div>
+          <label for="title" class="block text-sm font-medium text-gray-700">Title</label>
+          <input
+            type="text"
+            id="title"
+            value="${data.title.replace(/"/g, '&quot;')}"
+            required
+            class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder="e.g. Biology - Chapter 1"
+          />
+        </div>
+        <div>
+          <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
+          <textarea
+            id="description"
+            rows="3"
+            class="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder="A quick summary of what this set covers"
+          >${data.description}</textarea>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex-grow flex flex-col">
+            <span class="text-sm font-medium text-gray-900">Visibility</span>
+            <span id="visibility-text" class="text-sm text-gray-500">${data.isPublic ? "Visible to everyone." : "Only visible to you."}</span>
+          </span>
+          <button
+            type="button"
+            id="visibility-toggle"
+            class="${data.isPublic ? 'bg-blue-600' : 'bg-gray-200'} relative inline-flex items-center h-6 rounded-full w-11 transition-colors"
+          >
+            <span class="sr-only">Toggle Visibility</span>
+            <span
+              class="${data.isPublic ? 'translate-x-6' : 'translate-x-1'} inline-block w-4 h-4 transform bg-white rounded-full transition-transform"
+            />
+          </button>
+        </div>
+        <div class="border-t border-gray-200 pt-6">
+          <h2 class="text-xl font-semibold text-gray-800 mb-4">Flashcards</h2>
+          <div id="cards-container" class="space-y-4">
+            ${cardsHTML}
+          </div>
+          <button
+            type="button"
+            id="add-card-button"
+            class="mt-4 inline-flex items-center px-4 py-2 border border-dashed border-gray-400 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            ${IconPlus}
+            <span class="ml-2">Add Card</span>
+          </button>
+        </div>
+      `;
+      
+      document.getElementById('form-submit-button').disabled = false;
+    }
+    
+    function attachSetEditorListeners(setId = null) {
+      const form = document.getElementById('set-editor-form');
+      const errorEl = document.getElementById('form-error');
+      const submitButton = document.getElementById('form-submit-button');
+      const formContent = document.getElementById('form-content');
+      
+      let isPublic = false;
+      
+      // Add/Remove Card Listeners
+      formContent.addEventListener('click', e => {
+        if (e.target.closest('.add-card-button')) {
+          // This button ID is wrong, should be #add-card-button
+          // Fixed by using closest
+        }
+        if (e.target.closest('#add-card-button')) {
+          const container = document.getElementById('cards-container');
+          const cardCount = container.querySelectorAll('.card-entry').length;
+          container.insertAdjacentHTML('beforeend', `
+            <div class="card-entry grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-gray-200 rounded-lg">
+              <div>
+                <label class="block text-xs font-medium text-gray-600">Term</label>
+                <input type="text" class="card-term w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" placeholder="Term" value="" />
+              </div>
+              <div class="flex">
+                <div class="flex-grow">
+                  <label class="block text-xs font-medium text-gray-600">Definition</label>
+                  <input type="text" class="card-definition w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm" placeholder="Definition" value="" />
+                </div>
+                <button type="button" class="remove-card-button ml-2 mt-6 p-2 text-gray-400 hover:text-red-600 rounded-full h-10 w-10 flex items-center justify-center">${IconTrash}</button>
+              </div>
+            </div>
+          `);
+        }
+        
+        if (e.target.closest('.remove-card-button')) {
+          const cardEntries = document.querySelectorAll('.card-entry');
+          if (cardEntries.length <= 1) {
+            alert("You must have at least one card.");
+            return;
+          }
+          e.target.closest('.card-entry').remove();
+        }
+        
+        if (e.target.closest('#visibility-toggle')) {
+          isPublic = !isPublic;
+          const toggle = document.getElementById('visibility-toggle');
+          const text = document.getElementById('visibility-text');
+          const span = toggle.querySelector('span:last-child');
+          
+          toggle.classList.toggle('bg-blue-600', isPublic);
+          toggle.classList.toggle('bg-gray-200', !isPublic);
+          span.classList.toggle('translate-x-6', isPublic);
+          span.classList.toggle('translate-x-1', !isPublic);
+          text.textContent = isPublic ? "Visible to everyone." : "Only visible to you.";
+        }
+      });
+      
+      // Load data if editing
+      if (setId) {
+        getDoc(doc(db, "studySets", setId)).then(docSnap => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.ownerId !== currentUser.uid) {
+              errorEl.textContent = "You don't have permission to edit this set.";
+              return;
+            }
+            isPublic = data.isPublic;
+            renderSetEditorForm(data);
+          } else {
+            errorEl.textContent = "Study set not found.";
+          }
+        }).catch(err => {
+          console.error("Error fetching set:", err);
+          errorEl.textContent = "Failed to load study set.";
+        });
+      } else {
+        renderSetEditorForm(); // Render empty form
+      }
+      
+      // Form Submission
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        submitButton.disabled = true;
+        submitButton.textContent = "Saving...";
+        errorEl.textContent = '';
+        
+        const cards = [];
+        document.querySelectorAll('.card-entry').forEach(entry => {
+          const term = entry.querySelector('.card-term').value.trim();
+          const definition = entry.querySelector('.card-definition').value.trim();
+          if (term && definition) {
+            cards.push({ term, definition });
+          }
+        });
+        
+        if (cards.length === 0) {
+          errorEl.textContent = "You must have at least one valid card.";
+          submitButton.disabled = false;
+          submitButton.textContent = setId ? 'Update Set' : 'Create Set';
+          return;
+        }
+        
+        const setData = {
+          title: document.getElementById('title').value.trim(),
+          description: document.getElementById('description').value.trim(),
+          isPublic,
+          ownerId: currentUser.uid,
+          ownerEmail: currentUser.email,
+          cards: cards,
+          updatedAt: serverTimestamp(),
+        };
+        
+        try {
+          if (setId) {
+            await updateDoc(doc(db, "studySets", setId), setData);
+          } else {
+            setData.createdAt = serverTimestamp();
+            await addDoc(collection(db, "studySets"), setData);
+          }
+          navigate('dashboard');
+        } catch (err) {
+          console.error("Error saving set:", err);
+          errorEl.textContent = "Failed to save set: " + err.message;
+          submitButton.disabled = false;
+          submitButton.textContent = setId ? 'Update Set' : 'Create Set';
+        }
+      });
+      
+      // Delete Button Logic
+      if (setId) {
+        const modal = document.getElementById('delete-confirm-modal');
+        document.getElementById('delete-set-button').addEventListener('click', () => {
+          modal.classList.remove('hidden');
+        });
+        document.getElementById('delete-cancel-button').addEventListener('click', () => {
+          modal.classList.add('hidden');
+        });
+        document.getElementById('delete-confirm-button').addEventListener('click', async () => {
+          const deleteButton = document.getElementById('delete-confirm-button');
+          deleteButton.disabled = true;
+          deleteButton.textContent = "Deleting...";
+          try {
+            await deleteDoc(doc(db, "studySets", setId));
+            modal.classList.add('hidden');
+            navigate('dashboard');
+          } catch (err) {
+            console.error("Error deleting set:", err);
+            errorEl.textContent = "Failed to delete set: " + err.message;
+            deleteButton.disabled = false;
+            deleteButton.textContent = "Delete";
+          }
+        });
+      }
+    }
+    
+    // --- STUDY PAGE ---
+    function StudyPageHTML() {
+      // Just a loader, content will be filled by fetchStudySet
+      return `
+        <div id="study-page-container" class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <p>Loading study set...</p>
+        </div>
+      `;
+    }
+    
+    function fetchStudySet() {
+      const container = document.getElementById('study-page-container');
+      
+      getDoc(doc(db, "studySets", currentSetId)).then(docSnap => {
+        if (!docSnap.exists()) {
+          container.innerHTML = `<p class="text-red-600">Study set not found.</p>`;
+          return;
+        }
+        
+        const set = docSnap.data();
+        if (!set.cards || set.cards.length === 0) {
+            container.innerHTML = `<p class="text-red-600">This set has no cards to study.</p>`;
+            return;
+        }
+        
+        let currentIndex = 0;
+        let isFlipped = false;
+        let knownCards = new Set();
+        
+        function renderStudyUI() {
+          const currentCard = set.cards[currentIndex];
+          const isKnown = knownCards.has(currentCard.term);
+          const progressPercent = (knownCards.size / set.cards.length) * 100;
+          
+          container.innerHTML = `
+            <button data-page="dashboard" class="nav-button flex items-center text-blue-600 hover:underline mb-4">
+              ${IconBack} <span class="ml-1">Back to Dashboard</span>
+            </button>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">${set.title}</h1>
+            <p class="text-lg text-gray-600 mb-6">${currentIndex + 1} / ${set.cards.length}</p>
+
+            <div class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+              <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progressPercent}%;"></div>
+            </div>
+            
+            <div id="flashcard" class="w-full h-96 perspective-1000 mb-6 cursor-pointer">
+              <div 
+                class="relative w-full h-full transition-transform duration-500 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}"
+              >
+                <div class="absolute backface-hidden w-full h-full bg-white rounded-lg shadow-xl flex items-center justify-center p-6">
+                  <p class="text-3xl md:text-4xl font-semibold text-gray-900 text-center">${currentCard.term}</p>
+                </div>
+                <div class="absolute backface-hidden rotate-y-180 w-full h-full bg-white rounded-lg shadow-xl flex items-center justify-center p-6">
+                  <p class="text-2xl md:text-3xl font-medium text-gray-800 text-center">${currentCard.definition}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div class="text-center text-gray-500 text-sm mb-6">Click card to flip</div>
+
+            <div class="flex items-center justify-between mb-6">
+              <button id="prev-card" class="p-4 rounded-full bg-white shadow-md hover:bg-gray-100">${IconPrev}</button>
+              <button id="flip-card" class="flex items-center px-6 py-3 rounded-lg bg-white shadow-md font-medium text-gray-700 hover:bg-gray-100">${IconFlip} <span class="ml-2">Flip</span></button>
+              <button id="next-card" class="p-4 rounded-full bg-white shadow-md hover:bg-gray-100">${IconNext}</button>
+            </div>
+            
+            <button
+              id="known-toggle"
+              class="w-full py-4 rounded-lg font-bold text-lg transition-colors ${
+                isKnown
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }"
+            >
+              ${isKnown ? 'Mark as Unknown' : 'Mark as Known'}
+            </button>
+          `;
+          
+          // Attach listeners for this view
+          document.getElementById('flashcard').addEventListener('click', flip);
+          document.getElementById('flip-card').addEventListener('click', flip);
+          document.getElementById('prev-card').addEventListener('click', prev);
+          document.getElementById('next-card').addEventListener('click', next);
+          document.getElementById('known-toggle').addEventListener('click', toggleKnown);
+          container.querySelector('.nav-button').addEventListener('click', () => navigate('dashboard'));
+        }
+        
+        function showCompletionModal() {
+            container.innerHTML = `
+              <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div class="bg-white p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+                  <h3 class="text-2xl font-bold text-gray-900">Set Complete!</h3>
+                  <p class="mt-4 text-lg text-gray-600">You've marked all ${set.cards.length} cards as known.</p>
+                  <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                    <button id="restart-button" class="px-6 py-3 bg-blue-600 border rounded-md text-base font-medium text-white hover:bg-blue-700">Study Again</button>
+                    <button id="dashboard-button" class="px-6 py-3 bg-white border border-gray-300 rounded-md text-base font-medium text-gray-700 hover:bg-gray-50">Back to Dashboard</button>
+                  </div>
+                </div>
+              </div>
+            `;
+            document.getElementById('restart-button').addEventListener('click', () => {
+                currentIndex = 0;
+                isFlipped = false;
+                knownCards.clear();
+                renderStudyUI();
+            });
+            document.getElementById('dashboard-button').addEventListener('click', () => navigate('dashboard'));
+        }
+        
+        function flip() {
+          isFlipped = !isFlipped;
+          renderStudyUI(); // Just re-render
+        }
+        
+        function next() {
+          isFlipped = false;
+          setTimeout(() => {
+            if (currentIndex < set.cards.length - 1) {
+              currentIndex++;
+            } else {
+              if (knownCards.size === set.cards.length) {
+                showCompletionModal();
+                return;
+              }
+              currentIndex = 0;
+            }
+            renderStudyUI();
+          }, 150);
+        }
+        
+        function prev() {
+          isFlipped = false;
+          setTimeout(() => {
+            if (currentIndex > 0) {
+              currentIndex--;
+            } else {
+              currentIndex = set.cards.length - 1;
+            }
+            renderStudyUI();
+          }, 150);
+        }
+        
+        function toggleKnown() {
+          const cardKey = set.cards[currentIndex].term;
+          if (knownCards.has(cardKey)) {
+            knownCards.delete(cardKey);
+          } else {
+            knownCards.add(cardKey);
+          }
+          
+          if (!isFlipped && knownCards.has(cardKey)) {
+            next(); // Auto-advance if marking as known
+          } else {
+            renderStudyUI();
+          }
+        }
+        
+        renderStudyUI();
+        
+      }).catch(err => {
+        console.error("Error fetching set:", err);
+        container.innerHTML = `<p class="text-red-600">Failed to load study set.</p>`;
+      });
+    }
+
+    // --- SEARCH PAGE ---
+    function SearchPageHTML() {
+      return `
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <h1 class="text-3xl font-bold text-gray-900 mb-6">Search Public Sets</h1>
+          <div class="mb-6">
+            <input
+              type="text"
+              id="search-input"
+              class="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Search by title or description..."
+            />
+          </div>
+          <div id="search-results">
+            <p>Loading public sets...</p>
+          </div>
+        </div>
+      `;
+    }
+    
+    function attachSearchListeners() {
+      const resultsEl = document.getElementById('search-results');
+      const searchInput = document.getElementById('search-input');
+      let allPublicSets = [];
+      
+      const setsCollection = collection(db, "studySets");
+      const q = query(setsCollection, where("isPublic", "==", true));
+      
+      currentUnsubscribe = onSnapshot(q, (querySnapshot) => {
+        allPublicSets = [];
+        querySnapshot.forEach((doc) => {
+          allPublicSets.push({ id: doc.id, ...doc.data() });
+        });
+        renderSearchResults(allPublicSets, '');
+      }, (err) => {
+        console.error("Error fetching public sets:", err);
+        resultsEl.innerHTML = `<p class="text-red-600">Failed to load public sets.</p>`;
+      });
+      
+      searchInput.addEventListener('input', (e) => {
+        renderSearchResults(allPublicSets, e.target.value);
+      });
+    }
+    
+    function renderSearchResults(sets, searchTerm) {
+      const resultsEl = document.getElementById('search-results');
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      
+      const filteredSets = sets.filter(set => 
+        set.title.toLowerCase().includes(lowerSearchTerm) ||
+        set.description.toLowerCase().includes(lowerSearchTerm)
+      );
+      
+      if (filteredSets.length === 0) {
+        resultsEl.innerHTML = `<p class="text-gray-600">${searchTerm ? 'No sets found matching your search.' : 'No public sets available.'}</p>`;
+        return;
+      }
+      
+      let setsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
+      filteredSets.forEach(set => {
+        setsHTML += SetCardHTML(set.id, set, true); // true for isPublicSearch
+      });
+      setsHTML += '</div>';
+      resultsEl.innerHTML = setsHTML;
+      
+      attachSetCardListeners();
+    }
+    
+    // --- UPLOAD PAGE ---
+    function UploadPageHTML() {
+      return `
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div class="bg-white p-8 rounded-lg shadow-xl text-center">
+            ${IconAI}
+            <h1 class="text-3xl font-bold text-gray-900 mt-4 mb-4">Import & Auto-Create</h1>
+            <p class="text-lg text-gray-600 mb-8">
+              Upload a <code>.pdf</code> or <code>.txt</code> file and our AI will
+              automatically create flashcards for you.
+            </p>
+            <div class="p-6 border-2 border-dashed border-gray-300 rounded-lg">
+              <label 
+                for="file-upload" 
+                class="cursor-pointer inline-flex items-center px-6 py-3 bg-white border border-gray-300 rounded-md shadow-sm text-base font-medium text-gray-700 hover:bg-gray-50"
+              >
+                ${IconUpload}
+                <span id="file-name-label" class="ml-2">Select a file</span>
+              </label>
+              <input id="file-upload" name="file-upload" type="file" class="sr-only" accept=".pdf,.txt,.md" />
+            </div>
+            
+            <div id="progress-container" class="hidden w-full bg-gray-200 rounded-full h-2.5 mt-4">
+              <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+            
+            <button
+              id="upload-button"
+              disabled
+              class="w-full mt-8 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              Upload & Generate
+            </button>
+            
+            <p id="upload-message" class="mt-4 text-sm"></p>
+            
+            <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
+              <h4 class="font-semibold text-blue-800">How this works:</h4>
+              <p class="text-sm text-blue-700 mt-2">1. This page uploads your file to a private folder in Firebase Storage.</p>
+              <p class="text-sm text-blue-700 mt-2">2. This upload automatically triggers your AI Cloud Function (from Step 3 of the guide).</p>
+              <p class="text-sm text-blue-700 mt-2">3. The AI creates your flashcards and saves them as a new set in your account.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    function attachUploadListeners() {
+      const fileInput = document.getElementById('file-upload');
+      const uploadButton = document.getElementById('upload-button');
+      const fileNameLabel = document.getElementById('file-name-label');
+      const messageEl = document.getElementById('upload-message');
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      
+      let selectedFile = null;
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+          selectedFile = e.target.files[0];
+          fileNameLabel.textContent = selectedFile.name;
+          uploadButton.disabled = false;
+          messageEl.textContent = '';
+        }
+      });
+
+      uploadButton.addEventListener('click', () => {
+        if (!selectedFile) {
+          messageEl.textContent = 'Please select a file first.';
+          messageEl.className = 'mt-4 text-sm text-red-600';
+          return;
+        }
+        if (!currentUser) {
+          messageEl.textContent = 'You must be logged in to upload.';
+          messageEl.className = 'mt-4 text-sm text-red-600';
+          return;
+        }
+        
+        uploadButton.disabled = true;
+        uploadButton.textContent = 'Uploading...';
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '0%';
+
+        const storagePath = `uploads/${currentUser.uid}/${selectedFile.name}`;
+        const storageRef = ref(storage, storagePath);
+        const uploadTask = uploadBytesResumable(storageRef, selectedFile);
+        
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransactionsferred / snapshot.totalBytes) * 100;
+            progressBar.style.width = `${progress}%`;
+            messageEl.textContent = `Uploading: ${Math.round(progress)}%`;
+            messageEl.className = 'mt-4 text-sm text-blue-600';
+          }, 
+          (error) => {
+            console.error("Upload failed:", error);
+            messageEl.textContent = 'Upload failed: ' + error.message;
+            messageEl.className = 'mt-4 text-sm text-red-600';
+            uploadButton.disabled = false;
+            uploadButton.textContent = 'Upload & Generate';
+          }, 
+          () => {
+            messageEl.textContent = 'Upload complete! Your file is processing. Your new set will appear on your dashboard soon.';
+            messageEl.className = 'mt-4 text-sm text-green-600';
+            selectedFile = null;
+            fileNameLabel.textContent = 'Select a file';
+            setTimeout(() => {
+                navigate('dashboard');
+            }, 3000);
+          }
+        );
+      });
+    }
+
+    // --- APP ENTRY POINT ---
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        if (currentPage === 'auth') {
+          navigate('dashboard');
+        } else {
+          render(); // Re-render in case we were on a page that needs user data
+        }
+      } else {
+        currentUser = null;
+        navigate('auth');
+      }
+    });
+
+  </script>
+</body>
+</html>
+
