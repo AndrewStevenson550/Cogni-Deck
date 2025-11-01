@@ -11,6 +11,13 @@
   <!-- Confetti CDN -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
+  <!-- PDF.js CDN (for client-side PDF parsing) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script>
+    // Required by PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js`;
+  </script>
+  
   <!-- Custom Tailwind Config -->
   <script>
     tailwind.config = {
@@ -99,12 +106,7 @@
       onSnapshot,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    // *** REMOVED STORAGE, ADDED FUNCTIONS ***
-    import {
-      getFunctions,
-      httpsCallable
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
-
+    
     // --- FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyDaTxyHz5dr4aWCE4tAiql4jJ4ImrrJKQM",
@@ -119,9 +121,11 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    // *** REMOVED STORAGE, ADDED FUNCTIONS ***
-    const functions = getFunctions(app);
     setLogLevel('Debug');
+    
+    // --- GEMINI API KEY ---
+    // WARNING: This key is visible to anyone who views your website's source code.
+    const GEMINI_API_KEY = "AIzaSyDxNcI0uaa1C6z6mc09lINO7rLcNe2xyig";
 
     // --- SVG ICONS (as string constants) ---
     const IconHome = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>`;
@@ -138,9 +142,10 @@
     const IconPublic = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c.24 0 .477-.007.71-.021M12 21c-.24 0-.477-.007-.71-.021M12 15a3.75 3.75 0 003.75-3.75V8.25A3.75 3.75 0 0012 4.5v.001M12 15a3.75 3.75 0 01-3.75-3.75V8.25A3.75 3.75 0 0112 4.5v.001M12 15v.001M12 4.5v.001m0 0v.001m0 0h.001M12 15h.001M12 4.5h.001M12 3c-1.928 0-3.69.784-4.95 2.05S4.5 8.072 4.5 10v.75a8.217 8.217 0 004.22 7.029c.465.253.96.442 1.48.59M12 3c1.928 0 3.69.784 4.95 2.05S19.5 8.072 19.5 10v.75a8.217 8.217 0 01-4.22 7.029c-.465.253-.96.442-1.48.59M12 3v.001" /></svg>`;
     const IconPrivate = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>`;
     const IconAI = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" class="w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 21.75l-.648-1.188a2.25 2.25 0 00-1.579-1.579L12.75 18.25l1.188-.648a2.25 2.25 0 001.579-1.579L16.25 15l.648 1.188a2.25 2.25 0 001.579 1.579L19.75 18.25l-1.188.648a2.25 2.25 0 00-1.579 1.579z" /></svg>`;
-    // NEW: Quiz Icon
     const IconQuiz = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>`;
-    
+    // NEW: Icon for About page
+    const IconUser = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A18.75 18.75 0 0 1 12 22.5c-5.772 0-10.82-2.12-14.234-5.521A1.5 1.5 0 0 1 1.034 15.54a1.5 1.5 0 0 1 1.968-.316A16.51 16.51 0 0 0 12 18c4.228 0 8.017-1.42 11.032-3.774a1.5 1.5 0 0 1 1.968.316a1.5 1.5 0 0 1-.223 2.196A18.75 18.75 0 0 1 12 22.5a18.75 18.75 0 0 1-7.499-2.382Z" /></svg>`;
+
     // --- GLOBAL STATE ---
     let currentUser = null;
     let currentPage = 'auth';
@@ -212,6 +217,10 @@
         case 'upload':
           mainContent.innerHTML = UploadPageHTML();
           break;
+        // NEW: About Page
+        case 'about':
+          mainContent.innerHTML = AboutPageHTML();
+          break;
         case 'create':
           mainContent.innerHTML = SetEditorHTML();
           break;
@@ -221,7 +230,6 @@
         case 'study':
           mainContent.innerHTML = StudyPageHTML(); // This is just a loader
           break;
-        // NEW: Quiz Case
         case 'quiz':
           mainContent.innerHTML = QuizPageHTML(); // This is just a loader
           break;
@@ -248,6 +256,10 @@
         case 'upload':
           attachUploadListeners(); // Now it's safe
           break;
+        // NEW: About Page
+        case 'about':
+          // No listeners needed for this static page
+          break;
         case 'create':
           attachSetEditorListeners(); // Now it's safe
           break;
@@ -257,7 +269,6 @@
         case 'study':
           fetchStudySet(); // This function finds elements and *then* fetches
           break;
-        // NEW: Quiz Case
         case 'quiz':
           fetchQuizSet(); // This function finds elements and *then* fetches
           break;
@@ -291,6 +302,7 @@
                 ${NavButton('dashboard', IconHome, 'Home')}
                 ${NavButton('search', IconSearch, 'Search')}
                 ${NavButton('upload', IconUpload, 'Import')}
+                ${NavButton('about', IconUser, 'About')} <!-- NEW -->
                 <button
                   data-page="create"
                   class="nav-button ml-4 flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -1123,7 +1135,7 @@
       attachSetCardListeners();
     }
     
-    // --- UPLOAD PAGE ---
+    // --- UPLOAD PAGE (CLIENT-SIDE AI) ---
     function UploadPageHTML() {
       return `
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1160,13 +1172,95 @@
             
             <p id="upload-message" class="mt-4 text-sm"></p>
             
-            <!-- REMOVED 'How it works' section -->
-
           </div>
         </div>
       `;
     }
     
+    /**
+     * Helper function to parse file content
+     */
+    async function parseFileContent(file) {
+      if (file.type === 'application/pdf') {
+        // --- PDF Parsing ---
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsArrayBuffer(file);
+          reader.onload = () => {
+            const loadingTask = pdfjsLib.getDocument(reader.result);
+            loadingTask.promise.then(async (pdf) => {
+              let allText = '';
+              for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                allText += textContent.items.map(item => item.str).join(' ');
+              }
+              resolve(allText);
+            }).catch(reject);
+          };
+          reader.onerror = reject;
+        });
+      } else {
+        // --- Text File Parsing ---
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsText(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+        });
+      }
+    }
+    
+    /**
+     * Helper function to call Gemini API
+     */
+    async function callGeminiAPI(extractedText) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+      
+      const prompt = `
+        You are an expert study assistant.
+        Analyze the following text and extract the most important key terms and their definitions.
+        Return your answer as a valid JSON array of objects, where each object has a "term" and "definition" key.
+        
+        Example: [{"term": "Mitochondria", "definition": "The powerhouse of the cell."}]
+        
+        If you cannot find any good terms, return an empty array [].
+        Do not return more than 50 cards.
+        
+        Text to analyze:
+        ---
+        ${extractedText.substring(0, 100000)}
+        ---
+      `;
+      
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Google AI API error! Status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      const candidate = result.candidates?.[0];
+      
+      if (!candidate || !candidate.content?.parts?.[0]?.text) {
+        throw new Error('Invalid response from AI.');
+      }
+      
+      let jsonText = candidate.content.parts[0].text;
+      jsonText = jsonText.trim().replace(/^```json|```$/g, ""); // Clean markdown
+      
+      const cards = JSON.parse(jsonText);
+      return cards;
+    }
+
     function attachUploadListeners() {
       const fileInput = document.getElementById('file-upload');
       const uploadButton = document.getElementById('upload-button');
@@ -1193,7 +1287,7 @@
         }
       });
 
-      uploadButton.addEventListener('click', () => {
+      uploadButton.addEventListener('click', async () => {
         if (!selectedFile) {
           messageEl.textContent = 'Please select a file first.';
           messageEl.className = 'mt-4 text-sm text-red-600';
@@ -1211,50 +1305,83 @@
         messageEl.textContent = 'Reading file and contacting AI... This may take a moment.';
         messageEl.className = 'mt-4 text-sm text-blue-600';
 
-        // Read the file as a Base64 string
-        const reader = new FileReader();
-        reader.readAsDataURL(selectedFile);
-        reader.onload = async () => {
-          const fileData = reader.result; // This is the base64 string
-          const fileType = selectedFile.type;
-
-          try {
-            // Get the callable function from Firebase
-            const generateFlashcards = httpsCallable(functions, 'generateFlashcardsFromData');
-            
-            // Call the function with the file data
-            const result = await generateFlashcards({ fileData, fileType });
-
-            if (result.data.success) {
-              messageEl.textContent = `Success! New set created. Navigating to dashboard...`;
-              messageEl.className = 'mt-4 text-sm text-green-600';
-              setTimeout(() => {
-                  navigate('dashboard');
-              }, 2000);
-            } else {
-              throw new Error(result.data.error || 'Unknown error occurred in function.');
-            }
-
-          } catch (error) {
-            console.error("Function call failed:", error);
-            messageEl.textContent = 'Failed to generate cards: ' + error.message;
-            messageEl.className = 'mt-4 text-sm text-red-600';
-            uploadButton.disabled = false;
-            uploadButton.textContent = 'Generate Cards';
-            loadingSpinner.classList.add('hidden');
+        try {
+          // 1. Parse file content (PDF or TXT)
+          const text = await parseFileContent(selectedFile);
+          
+          if (text.length < 50) {
+            throw new Error('Not enough text in the file to process.');
           }
-        };
-        reader.onerror = () => {
-            messageEl.textContent = 'Failed to read the file.';
-            messageEl.className = 'mt-4 text-sm text-red-600';
-            uploadButton.disabled = false;
-            uploadButton.textContent = 'Generate Cards';
-            loadingSpinner.classList.add('hidden');
-        };
+          
+          messageEl.textContent = 'File read. Asking AI to generate cards...';
+
+          // 2. Call Gemini API with the text
+          const cards = await callGeminiAPI(text);
+          
+          if (cards.length === 0) {
+            throw new Error('The AI could not find any flashcards in that text.');
+          }
+          
+          messageEl.textContent = `Found ${cards.length} cards. Saving to your account...`;
+
+          // 3. Save the new set to Firestore
+          const newSet = {
+            title: `AI Set: ${selectedFile.name}`,
+            description: `Generated from file: ${selectedFile.name}`,
+            ownerId: currentUser.uid,
+            ownerEmail: currentUser.email,
+            isPublic: false, // Default to private
+            cards: cards,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+          
+          await addDoc(collection(db, "studySets"), newSet);
+          
+          // 4. Success!
+          messageEl.textContent = `Success! New set created. Navigating to dashboard...`;
+          messageEl.className = 'mt-4 text-sm text-green-600';
+          setTimeout(() => {
+              navigate('dashboard');
+          }, 2000);
+
+        } catch (error) {
+          console.error("AI generation failed:", error);
+          messageEl.textContent = 'Failed to generate cards: ' + error.message;
+          messageEl.className = 'mt-4 text-sm text-red-600';
+          uploadButton.disabled = false;
+          uploadButton.textContent = 'Generate Cards';
+          loadingSpinner.classList.add('hidden');
+        }
       });
     }
 
-    // --- NEW: QUIZ PAGE ---
+    // --- NEW: ABOUT PAGE ---
+    function AboutPageHTML() {
+      return `
+        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div class="bg-white p-8 md:p-12 rounded-lg shadow-xl">
+            <h1 class="text-3xl font-bold text-gray-900 mb-6">About the Creator</h1>
+            <div class="prose prose-lg max-w-none text-gray-700 space-y-4">
+              <p>
+                Hi, I'm Andrew Stevenson, a 14-year-old student with a passion for coding.
+              </p>
+              <p>
+                I built CogniDeck from scratch because I wanted a study tool that was powerful, easy to use, and completely free for everyone. As a student, I knew how important it was to have good tools, so I decided to build one myself.
+              </p>
+              <p>
+                This project was a huge learning adventure. I figured out how to use Firebase for a live database and even how to use Google's AI to automatically create flashcards from documents.
+              </p>
+              <p>
+                My goal is to help other students, like me, study smarter. I hope CogniDeck helps you ace your next test!
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // --- QUIZ PAGE ---
     
     /**
      * Utility function to shuffle an array
