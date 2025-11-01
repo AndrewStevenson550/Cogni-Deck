@@ -8,7 +8,7 @@
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- NEW: Confetti CDN -->
+  <!-- Confetti CDN -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
   <!-- Custom Tailwind Config -->
@@ -99,12 +99,11 @@
       onSnapshot,
       serverTimestamp
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    // *** REMOVED STORAGE, ADDED FUNCTIONS ***
     import {
-      getStorage,
-      ref,
-      uploadBytesResumable,
-      getDownloadURL
-    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+      getFunctions,
+      httpsCallable
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 
     // --- FIREBASE CONFIG ---
     const firebaseConfig = {
@@ -120,7 +119,8 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
-    const storage = getStorage(app);
+    // *** REMOVED STORAGE, ADDED FUNCTIONS ***
+    const functions = getFunctions(app);
     setLogLevel('Debug');
 
     // --- SVG ICONS (as string constants) ---
@@ -1145,8 +1145,9 @@
               <input id="file-upload" name="file-upload" type="file" class="sr-only" accept=".pdf,.txt,.md" />
             </div>
             
-            <div id="progress-container" class="hidden w-full bg-gray-200 rounded-full h-2.5 mt-4">
-              <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            <!-- This is a spinner, not a progress bar, as processing time is unknown -->
+            <div id="loading-spinner" class="hidden w-full flex justify-center items-center mt-4">
+              <div class="w-8 h-8 border-4 border-blue-500 rounded-full animate-spin loader"></div>
             </div>
             
             <button
@@ -1154,17 +1155,13 @@
               disabled
               class="w-full mt-8 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
-              Upload & Generate
+              Generate Cards
             </button>
             
             <p id="upload-message" class="mt-4 text-sm"></p>
             
-            <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-left">
-              <h4 class="font-semibold text-blue-800">How this works:</h4>
-              <p class="text-sm text-blue-700 mt-2">1. This page uploads your file to a private folder in Firebase Storage.</p>
-              <p class="text-sm text-blue-700 mt-2">2. This upload automatically triggers your AI Cloud Function (from Step 3 of the guide).</p>
-              <p class="text-sm text-blue-700 mt-2">3. The AI creates your flashcards and saves them as a new set in your account.</p>
-            </div>
+            <!-- REMOVED 'How it works' section -->
+
           </div>
         </div>
       `;
@@ -1175,14 +1172,21 @@
       const uploadButton = document.getElementById('upload-button');
       const fileNameLabel = document.getElementById('file-name-label');
       const messageEl = document.getElementById('upload-message');
-      const progressContainer = document.getElementById('progress-container');
-      const progressBar = document.getElementById('progress-bar');
+      const loadingSpinner = document.getElementById('loading-spinner');
       
       let selectedFile = null;
 
       fileInput.addEventListener('change', (e) => {
         if (e.target.files[0]) {
           selectedFile = e.target.files[0];
+          // Simple validation
+          if (selectedFile.type !== 'application/pdf' && !selectedFile.type.startsWith('text/')) {
+            messageEl.textContent = 'Invalid file type. Please select a .pdf or .txt file.';
+            messageEl.className = 'mt-4 text-sm text-red-600';
+            selectedFile = null;
+            uploadButton.disabled = true;
+            return;
+          }
           fileNameLabel.textContent = selectedFile.name;
           uploadButton.disabled = false;
           messageEl.textContent = '';
@@ -1202,38 +1206,51 @@
         }
         
         uploadButton.disabled = true;
-        uploadButton.textContent = 'Uploading...';
-        progressContainer.classList.remove('hidden');
-        progressBar.style.width = '0%';
+        uploadButton.textContent = 'Processing...';
+        loadingSpinner.classList.remove('hidden');
+        messageEl.textContent = 'Reading file and contacting AI... This may take a moment.';
+        messageEl.className = 'mt-4 text-sm text-blue-600';
 
-        const storagePath = `uploads/${currentUser.uid}/${selectedFile.name}`;
-        const storageRef = ref(storage, storagePath);
-        const uploadTask = uploadBytesResumable(storageRef, selectedFile);
-        
-        uploadTask.on('state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            progressBar.style.width = `${progress}%`;
-            messageEl.textContent = `Uploading: ${Math.round(progress)}%`;
-            messageEl.className = 'mt-4 text-sm text-blue-600';
-          }, 
-          (error) => {
-            console.error("Upload failed:", error);
-            messageEl.textContent = 'Upload failed: ' + error.message;
+        // Read the file as a Base64 string
+        const reader = new FileReader();
+        reader.readAsDataURL(selectedFile);
+        reader.onload = async () => {
+          const fileData = reader.result; // This is the base64 string
+          const fileType = selectedFile.type;
+
+          try {
+            // Get the callable function from Firebase
+            const generateFlashcards = httpsCallable(functions, 'generateFlashcardsFromData');
+            
+            // Call the function with the file data
+            const result = await generateFlashcards({ fileData, fileType });
+
+            if (result.data.success) {
+              messageEl.textContent = `Success! New set created. Navigating to dashboard...`;
+              messageEl.className = 'mt-4 text-sm text-green-600';
+              setTimeout(() => {
+                  navigate('dashboard');
+              }, 2000);
+            } else {
+              throw new Error(result.data.error || 'Unknown error occurred in function.');
+            }
+
+          } catch (error) {
+            console.error("Function call failed:", error);
+            messageEl.textContent = 'Failed to generate cards: ' + error.message;
             messageEl.className = 'mt-4 text-sm text-red-600';
             uploadButton.disabled = false;
-            uploadButton.textContent = 'Upload & Generate';
-          }, 
-          () => {
-            messageEl.textContent = 'Upload complete! Your file is processing. Your new set will appear on your dashboard soon.';
-            messageEl.className = 'mt-4 text-sm text-green-600';
-            selectedFile = null;
-            fileNameLabel.textContent = 'Select a file';
-            setTimeout(() => {
-                navigate('dashboard');
-            }, 3000);
+            uploadButton.textContent = 'Generate Cards';
+            loadingSpinner.classList.add('hidden');
           }
-        );
+        };
+        reader.onerror = () => {
+            messageEl.textContent = 'Failed to read the file.';
+            messageEl.className = 'mt-4 text-sm text-red-600';
+            uploadButton.disabled = false;
+            uploadButton.textContent = 'Generate Cards';
+            loadingSpinner.classList.add('hidden');
+        };
       });
     }
 
@@ -1438,5 +1455,4 @@
   </script>
 </body>
 </html>
-
 
