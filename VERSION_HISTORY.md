@@ -1,5 +1,23 @@
 # CogniDeck - Version History
 
+## [v4.0.0] - Advanced "Learn Mode"
+*Date: 11/04/2025*
+
+This is a major feature update that adds a powerful, customizable new study mode to make the app a true study tool.
+
+### Added
+- **New "Learn" Button:** Added a "Learn" button to all study sets on the dashboard.
+- **Learn Setup Screen:** Created a new pre-session setup screen where users can customize their study session.
+- **Customization Options:**
+    - **Session Size:** Choose how many cards to study (10, 20, or All).
+    - **Question Types:** Select "Multiple Choice," "Typed Answer," or a mix of both.
+    - **Prompt Direction:** Choose to be prompted with the "Term" or the "Definition."
+- **Learn Session Engine:**
+    - The new session page tracks correct and incorrect answers.
+    - Incorrectly answered cards are re-added to the queue to be asked again later.
+    - The session ends when all cards in the session have been answered correctly at least once.
+- **Confetti!:** Added a confetti celebration for successfully completing a Learn session.
+
 ## [v3.1.0] - The "About Me" Update
 *Date: 11/01/2025*
 
