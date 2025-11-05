@@ -1581,9 +1581,9 @@
             function doFlip() {
                 isFlipped = !isFlipped;
                 if (isFlipped) {
-                    flipperInner.classList.add('card-flipped');
+                    flipper.classList.add('card-flipped'); // FIX: Apply to the parent flipper
                 } else {
-                    flipperInner.classList.remove('card-flipped');
+                    flipper.classList.remove('card-flipped'); // FIX: Apply to the parent flipper
                 }
             }
 
