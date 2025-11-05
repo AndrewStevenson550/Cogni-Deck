@@ -101,7 +101,8 @@
     <!-- Main App Container -->
     <div id="app">
         <!-- This is where the app will be rendered by JavaScript -->
-        <div classclass="flex items-center justify-center h-screen">
+        <!-- FIXED: Corrected 'classclass' to 'class' -->
+        <div class="flex items-center justify-center h-screen">
             <div class="flex flex-col items-center">
                 <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                 <p class="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-200">Loading CogniDeck...</p>
@@ -134,11 +135,7 @@
           onSnapshot,
           serverTimestamp
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        // NEW: We are no longer using storage, but we need Functions
-        import { 
-            getFunctions, 
-            httpsCallable 
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+        // We are NOT using functions, so we don't import it.
 
 
         // --- IMPORTANT: PASTE YOUR FIREBASE CONFIG HERE ---
@@ -162,7 +159,6 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const functions = getFunctions(app); // Initialize Functions
         setLogLevel('Debug'); // Use 'Debug' for detailed logs
 
         // --- GLOBAL APP STATE ---
@@ -171,11 +167,25 @@
         let currentPage = 'auth';
         let currentSetId = null;
         let learnSettings = {}; // Store settings for learn mode
+        let dashboardUnsubscribe = null; // To store the dashboard listener
+        let searchUnsubscribe = null; // To store the search listener
 
         const appContainer = document.getElementById('app');
 
         // --- NAVIGATION ---
         function navigate(page, setId = null) {
+            // Unsubscribe from live listeners when leaving a page
+            if (currentPage === 'dashboard' && page !== 'dashboard' && dashboardUnsubscribe) {
+                console.log("Unsubscribing from dashboard");
+                dashboardUnsubscribe();
+                dashboardUnsubscribe = null;
+            }
+            if (currentPage === 'search' && page !== 'search' && searchUnsubscribe) {
+                console.log("Unsubscribing from search");
+                searchUnsubscribe();
+                searchUnsubscribe = null;
+            }
+
             currentPage = page;
             currentSetId = setId;
             render();
@@ -215,7 +225,7 @@
             
             switch (currentPage) {
                 case 'auth':
-                    pageHTML += AuthPageHTML();
+                    pageHTML = AuthPageHTML(); // Auth page is full screen, so replace all HTML
                     break;
                 case 'dashboard':
                     pageHTML += DashboardPageHTML();
@@ -266,7 +276,12 @@
             pageHTML += `</div>`; // End flex container
             pageHTML += `</div>`; // End max-w-7xl
 
-            appContainer.innerHTML = pageHTML;
+            // Handle auth page (which has no navbar or sidebars)
+            if (currentPage === 'auth') {
+                appContainer.innerHTML = pageHTML;
+            } else {
+                appContainer.innerHTML = pageHTML;
+            }
 
             // Attach event listeners after HTML is rendered
             attachAllListeners();
@@ -385,6 +400,7 @@
         function NavbarHTML() {
             const isDark = document.documentElement.classList.contains('dark');
             
+            // This helper function now correctly uses `currentPage` from the global scope
             const NavButton = (page, icon, label) => `
                 <button
                     id="nav-${page}"
@@ -399,6 +415,7 @@
                 </button>
             `;
             
+            // This helper function now correctly uses `currentPage` from the global scope
             const MobileNavButton = (page, icon, label) => `
                 <button
                     id="mobile-nav-${page}"
@@ -553,7 +570,7 @@
         async function handleSignOut() {
             try {
               await signOut(auth);
-              // Auth listener in App.js will handle success
+              // Auth listener will handle success
             } catch (error) {
               console.error("Error signing out:", error);
               alert("Error signing out: " + error.message);
@@ -669,7 +686,7 @@
                     } else {
                         await createUserWithEmailAndPassword(auth, email, password);
                     }
-                    // Auth listener in App.js will handle success
+                    // Auth listener will handle success
                 } catch (err) {
                     authError.textContent = err.message;
                     authError.classList.remove('hidden');
@@ -694,7 +711,7 @@
                             <ul class="list-disc list-inside space-y-2">
                                 <li><strong>Create & Manage Sets:</strong> Easily create, edit, and delete your own study sets.</li>
                                 <li><strong>Multiple Study Modes:</strong> Study with classic 3D Flashcards, a multiple-choice Quiz, or the smart "Learn" mode.</li>
-                                <li><strong>AI Import:</strong> Upload a `.txt` or `.pdf` file and let Google's AI automatically generate flashcards for you.</li>
+                                <li><strong>AI Import:</strong> Upload a \`.txt\` or \`.pdf\` file and let Google's AI automatically generate flashcards for you.</li>
                                 <li><strong>Search:</strong> Discover public sets created by other users.</li>
                                 <li><strong>Dark Mode:</strong> Study any time, day or night, with a comfortable dark theme.</li>
                             </ul>
@@ -735,8 +752,17 @@
             const q = query(setsCollection, where("ownerId", "==", globalUser.uid));
             
             const setListContainer = document.getElementById('dashboard-set-list');
+            
+            // Ensure we're on the right page before query
+            if (!setListContainer) return;
 
-            onSnapshot(q, (querySnapshot) => {
+            dashboardUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                // Add a check: only update if we are still on the dashboard page
+                if (currentPage !== 'dashboard' || !document.getElementById('dashboard-set-list')) {
+                    console.log("Dashboard listener fired, but not on dashboard page. Ignoring.");
+                    return;
+                }
+
                 if (querySnapshot.empty) {
                     setListContainer.innerHTML = `
                         <div class="col-span-full text-center p-12 bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -763,141 +789,164 @@
                 
                 // Add listeners for all the new cards
                 querySnapshot.forEach((doc) => {
-                    document.getElementById(`study-${doc.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (doc.data().cards && doc.data().cards.length > 0) {
-                            navigate('study', doc.id);
-                        } else {
-                            alert("This set has no cards! Add cards to study.");
+                    // Add checks to ensure elements exist before adding listeners
+                    const studyBtn = document.getElementById(`study-${doc.id}`);
+                    if (studyBtn) {
+                        studyBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (doc.data().cards && doc.data().cards.length > 0) {
+                                navigate('study', doc.id);
+                            } else {
+                                alert("This set has no cards! Add cards to study.");
+                                navigate('edit', doc.id);
+                            }
+                        });
+                    }
+                    
+                    const editBtn = document.getElementById(`edit-${doc.id}`);
+                    if (editBtn) {
+                        editBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
                             navigate('edit', doc.id);
-                        }
-                    });
-                    document.getElementById(`edit-${doc.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        navigate('edit', doc.id);
-                    });
-                    document.getElementById(`quiz-${doc.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (doc.data().cards && doc.data().cards.length >= 4) {
-                            navigate('quiz', doc.id);
-                        } else {
-                            alert("You need at least 4 cards in a set to start a quiz.");
-                        }
-                    });
-                    document.getElementById(`learn-${doc.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (doc.data().cards && doc.data().cards.length > 0) {
-                            navigate('learnSetup', doc.id);
-                        } else {
-                            alert("This set has no cards! Add cards to study.");
+                        });
+                    }
+
+                    const quizBtn = document.getElementById(`quiz-${doc.id}`);
+                    if (quizBtn) {
+                        quizBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (doc.data().cards && doc.data().cards.length >= 4) {
+                                navigate('quiz', doc.id);
+                            } else {
+                                alert("You need at least 4 cards in a set to start a quiz.");
+                            }
+                        });
+                    }
+                    
+                    const learnBtn = document.getElementById(`learn-${doc.id}`);
+                    if (learnBtn) {
+                        learnBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (doc.data().cards && doc.data().cards.length > 0) {
+                                navigate('learnSetup', doc.id);
+                            } else {
+                                alert("This set has no cards! Add cards to study.");
+                                navigate('edit', doc.id);
+                            }
+                        });
+                    }
+                    
+                    const card = document.getElementById(`card-${doc.id}`);
+                    if (card) {
+                        card.addEventListener('click', () => {
                             navigate('edit', doc.id);
-                        }
-                    });
-                    document.getElementById(`card-${doc.id}`).addEventListener('click', () => {
-                        navigate('edit', doc.id);
-                    });
+                        });
+                    }
                 });
 
             }, (err) => {
-                console.error("Error fetching sets:", err);
-                setListContainer.innerHTML = `<p class="text-red-600">Failed to load your study sets. Please try again later.</p>`;
+                console.error("Error in dashboard listener:", err);
+                if (setListContainer) {
+                    setListContainer.innerHTML = `<p class="text-red-600">Error loading sets: ${err.message}</p>`;
+                }
             });
         }
-        
-        function SetCardHTML(id, set, isPublicSearch = false) {
-            const cardCount = set.cards ? set.cards.length : 0;
-            const ownerEmail = set.ownerEmail || null;
 
+        function SetCardHTML(id, set) {
+            const cardCount = set.cards ? set.cards.length : 0;
+            const isOwner = set.ownerId === globalUser.uid;
+            const ownerEmail = set.ownerEmail || 'A user';
+            
+            // This is for the search page, so we don't show edit buttons
+            const isPublicSearch = !isOwner;
+            
             return `
-                <div 
-                  id="card-${id}"
-                  class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl cursor-pointer flex flex-col justify-between"
-                >
-                  <div class="p-6">
-                    <div class="flex justify-between items-start">
-                      <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">${set.title}</h3>
-                       ${set.isPublic ? `
-                        <div class="flex items-center text-xs text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 px-2 py-1 rounded-full">
+              <div
+                id="card-${id}"
+                class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col justify-between ${isOwner ? 'cursor-pointer' : 'cursor-default'}"
+              >
+                <div class="p-6">
+                  <div class="flex justify-between items-start">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">${set.title}</h3>
+                     ${set.isPublic ? `
+                        <div class="flex items-center text-xs text-green-600 dark:text-green-400 bg-green-100 dark:bg-gray-700 px-2 py-1 rounded-full">
                           ${IconPublic()}
                           <span class="ml-1">Public</span>
                         </div>
-                      ` : (
-                        !isPublicSearch ? `
-                          <div class="flex items-center text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 px-2 py-1 rounded-full">
-                            ${IconPrivate()}
-                            <span class="ml-1">Private</span>
-                          </div>
-                        ` : ''
-                      )}
-                    </div>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">${set.description || "No description."}</p>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                      ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}
+                     ` : `
+                        <div class="flex items-center text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-gray-700 px-2 py-1 rounded-full">
+                          ${IconPrivate()}
+                          <span class="ml-1">Private</span>
+                        </div>
+                     `}
+                  </div>
+                  <p class="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">${set.description || "No description."}</p>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}
+                  </p>
+                  ${isPublicSearch ? `
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Created by: ${ownerEmail}
                     </p>
-                    ${isPublicSearch && ownerEmail ? `
-                      <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Created by: ${ownerEmail}
-                      </p>
-                    ` : ''}
-                  </div>
-                  
-                  <div class="bg-gray-50 dark:bg-gray-700 p-4 flex flex-wrap justify-end gap-2">
-                    ${!isPublicSearch ? `
-                      <button
-                        id="edit-${id}"
-                        class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        ${IconEdit()}
-                        <span class="ml-2">Edit</span>
-                      </button>
-                    ` : ''}
-                    
-                    <button
-                        id="learn-${id}"
-                        disabled=${cardCount === 0}
-                        class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        ${IconLearn()}
-                        <span class="ml-2">Learn</span>
-                    </button>
-                    
-                    <button
-                        id="quiz-${id}"
-                        disabled=${cardCount < 4}
-                        class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 ${cardCount < 4 ? 'opacity-50 cursor-not-allowed' : ''}"
-                      >
-                        ${IconQuiz()}
-                        <span class="ml-2">Quiz</span>
-                    </button>
-                    
-                    <button
-                      id="study-${id}"
-                      disabled=${cardCount === 0}
-                      class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      ${IconBook()}
-                      <span class="ml-2">Study</span>
-                    </button>
-                  </div>
+                  ` : ''}
                 </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700 p-4 flex flex-wrap gap-2 justify-end">
+                  ${isOwner ? `
+                    <button
+                      id="edit-${id}"
+                      class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      ${IconEdit()}
+                      <span class="ml-2">Edit</span>
+                    </button>
+                  ` : ''}
+                  
+                  <button
+                      id="learn-${id}"
+                      disabled=${cardCount === 0}
+                      class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      ${IconLearn()}
+                      <span class="ml-2">Learn</span>
+                  </button>
+                  
+                  <button
+                    id="quiz-${id}"
+                    disabled=${cardCount < 4}
+                    class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="${cardCount < 4 ? 'Needs 4+ cards for a quiz' : 'Start Quiz'}"
+                  >
+                    ${IconQuiz()}
+                    <span class="ml-2">Quiz</span>
+                  </button>
+                  
+                  <button
+                    id="study-${id}"
+                    disabled=${cardCount === 0}
+                    class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ${IconBook()}
+                    <span class="ml-2">Study</span>
+                  </button>
+                </div>
+              </div>
             `;
         }
-        
+
         // --- SEARCH PAGE ---
         function SearchPageHTML() {
             return `
                 <div>
                   <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Search Public Sets</h1>
-                  
                   <div class="mb-6">
                     <input
                       type="text"
                       id="search-input"
-                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       placeholder="Search by title or description..."
                     />
                   </div>
-            
                   <div id="search-results-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <p class="text-gray-700 dark:text-gray-300">Loading public sets...</p>
                   </div>
@@ -908,430 +957,243 @@
         function attachSearchListeners() {
             const searchInput = document.getElementById('search-input');
             const resultsList = document.getElementById('search-results-list');
-            let allPublicSets = [];
             
-            // Fetch all public sets once
+            if (!searchInput) return;
+            
+            let allPublicSets = [];
+
             const setsCollection = collection(db, "studySets");
             const q = query(setsCollection, where("isPublic", "==", true));
 
-            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            searchUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                // Add a check: only update if we are still on the search page
+                if (currentPage !== 'search' || !document.getElementById('search-results-list')) {
+                    console.log("Search listener fired, but not on search page. Ignoring.");
+                    return;
+                }
+                
                 allPublicSets = [];
                 querySnapshot.forEach((doc) => {
                     allPublicSets.push({ id: doc.id, ...doc.data() });
                 });
                 renderSearchResults(allPublicSets);
             }, (err) => {
-                console.error("Error fetching public sets:", err);
-                resultsList.innerHTML = `<p class="text-red-600">Failed to load public sets.</p>`;
+                console.error("Error in search listener:", err);
+                if (resultsList) {
+                    resultsList.innerHTML = `<p class="text-red-600">Error loading sets: ${err.message}</p>`;
+                }
             });
-            
-            // Add search input listener
+
             searchInput.addEventListener('input', (e) => {
                 const searchTerm = e.target.value.toLowerCase();
-                if (!searchTerm) {
+                if (searchTerm.trim() === '') {
                     renderSearchResults(allPublicSets);
                     return;
                 }
                 const filteredSets = allPublicSets.filter(set => 
                     set.title.toLowerCase().includes(searchTerm) ||
-                    (set.description && set.description.toLowerCase().includes(searchTerm))
+                    set.description.toLowerCase().includes(searchTerm)
                 );
                 renderSearchResults(filteredSets, searchTerm);
             });
 
             // Helper to render results
             function renderSearchResults(sets, searchTerm = null) {
+                // Check if we are still on the search page before rendering
+                if (currentPage !== 'search') return;
+                
                 if (sets.length === 0) {
                     resultsList.innerHTML = `<p class="text-gray-600 dark:text-gray-400">
-                        ${searchTerm ? 'No sets found matching your search.' : 'No public sets available.'}
+                        ${searchTerm ? `No sets found matching "${searchTerm}".` : 'No public sets available.'}
                     </p>`;
                     return;
                 }
                 
                 let setsHTML = '';
                 sets.forEach(set => {
-                    setsHTML += SetCardHTML(set.id, set, true);
+                    setsHTML += SetCardHTML(set.id, set);
                 });
                 resultsList.innerHTML = setsHTML;
                 
                 // Add listeners for all the new cards
                 sets.forEach(set => {
-                    document.getElementById(`study-${set.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (set.cards && set.cards.length > 0) {
-                            navigate('study', set.id);
-                        } else {
-                            alert("This set has no cards!");
-                        }
-                    });
-                    document.getElementById(`quiz-${set.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (set.cards && set.cards.length >= 4) {
-                            navigate('quiz', set.id);
-                        } else {
-                            alert("You need at least 4 cards in a set to start a quiz.");
-                        }
-                    });
-                    document.getElementById(`learn-${set.id}`).addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (set.cards && set.cards.length > 0) {
-                            navigate('learnSetup', set.id);
-                        } else {
-                            alert("This set has no cards!");
-                        }
-                    });
-                    document.getElementById(`card-${set.id}`).addEventListener('click', () => {
-                        if (set.cards && set.cards.length > 0) {
-                            navigate('study', set.id);
-                        } else {
-                            alert("This set has no cards!");
-                        }
-                    });
+                    const studyBtn = document.getElementById(`study-${set.id}`);
+                    if (studyBtn) {
+                        studyBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (set.cards && set.cards.length > 0) {
+                                navigate('study', set.id);
+                            } else {
+                                alert("This set has no cards!");
+                            }
+                        });
+                    }
+                    
+                    const quizBtn = document.getElementById(`quiz-${set.id}`);
+                    if (quizBtn) {
+                        quizBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (set.cards && set.cards.length >= 4) {
+                                navigate('quiz', set.id);
+                            } else {
+                                alert("You need at least 4 cards in a set to start a quiz.");
+                            }
+                        });
+                    }
+                    
+                    const learnBtn = document.getElementById(`learn-${set.id}`);
+                    if (learnBtn) {
+                        learnBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (set.cards && set.cards.length > 0) {
+                                navigate('learnSetup', set.id);
+                            } else {
+                                alert("This set has no cards!");
+                            }
+                        });
+                    }
+
+                    const card = document.getElementById(`card-${set.id}`);
+                    if (card) {
+                        card.addEventListener('click', () => {
+                            if (set.cards && set.cards.length > 0) {
+                                navigate('study', set.id);
+                            } else {
+                                alert("This set has no cards!");
+                            }
+                        });
+                    }
                 });
             }
         }
         
-        // --- UPLOAD PAGE ---
-        function UploadPageHTML() {
-            return `
-                <div class="max-w-2xl mx-auto">
-                  <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
-                    ${IconAI()}
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mt-4 mb-4">Import & Auto-Create</h1>
-                    <p class="text-lg text-gray-600 dark:text-gray-400 mb-8">
-                      Upload a `.txt` or `.pdf` file and our AI will
-                      automatically create flashcards for you.
-                    </p>
-            
-                    <div class="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                      <label 
-                        for="file-upload" 
-                        class="cursor-pointer inline-flex items-center px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-                      >
-                        ${IconUpload()}
-                        <span class="ml-2" id="file-upload-label">Select a file</span>
-                      </label>
-                      <input id="file-upload" name="file-upload" type="file" class="sr-only" accept=".pdf,.txt" />
-                      
-                      <p id="file-name" class="mt-4 text-sm text-gray-600 dark:text-gray-400 hidden"></p>
-                    </div>
-                    
-                    <!-- Progress bar -->
-                    <div id="upload-progress-bar" class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-4 hidden">
-                      <div id="upload-progress-inner" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
-                    </div>
-                    
-                    <button
-                      id="upload-btn"
-                      disabled
-                      class="w-full mt-8 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                    >
-                      Upload & Generate
-                    </button>
-                    
-                    <p id="upload-message" class="mt-4 text-sm text-green-600 dark:text-green-400"></p>
-                  </div>
-                </div>
-            `;
-        }
-        
-        function attachUploadListeners() {
-            const fileInput = document.getElementById('file-upload');
-            const fileLabel = document.getElementById('file-upload-label');
-            const fileName = document.getElementById('file-name');
-            const uploadBtn = document.getElementById('upload-btn');
-            const message = document.getElementById('upload-message');
-            const progressBar = document.getElementById('upload-progress-bar');
-            const progressInner = document.getElementById('upload-progress-inner');
-            
-            let selectedFile = null;
-
-            fileInput.addEventListener('change', (e) => {
-                if (e.target.files[0]) {
-                    selectedFile = e.target.files[0];
-                    fileName.textContent = `Selected: ${selectedFile.name}`;
-                    fileName.classList.remove('hidden');
-                    fileLabel.textContent = 'Change file';
-                    uploadBtn.disabled = false;
-                    message.textContent = '';
-                }
-            });
-
-            uploadBtn.addEventListener('click', handleUpload);
-
-            async function handleUpload() {
-                if (!selectedFile) {
-                    message.textContent = 'Please select a file first.';
-                    message.className = 'mt-4 text-sm text-red-600 dark:text-red-400';
-                    return;
-                }
-                
-                if (!globalUser) {
-                    message.textContent = 'You must be logged in to upload a file.';
-                    message.className = 'mt-4 text-sm text-red-600 dark:text-red-400';
-                    return;
-                }
-
-                uploadBtn.disabled = true;
-                uploadBtn.textContent = 'Processing...';
-                message.textContent = 'Reading file...';
-                message.className = 'mt-4 text-sm text-blue-600 dark:text-blue-400';
-                progressBar.classList.add('hidden'); // We won't show progress bar for reading
-                
-                try {
-                    let extractedText = "";
-                    
-                    // 1. Read the file in the browser
-                    if (selectedFile.type === "application/pdf") {
-                        const fileReader = new FileReader();
-                        fileReader.onload = async (e) => {
-                            const typedarray = new Uint8Array(e.target.result);
-                            const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                            for (let i = 1; i <= pdf.numPages; i++) {
-                                const page = await pdf.getPage(i);
-                                const textContent = await page.getTextContent();
-                                extractedText += textContent.items.map(item => item.str).join(' ');
-                            }
-                            callGemini(extractedText, selectedFile.name);
-                        };
-                        fileReader.readAsArrayBuffer(selectedFile);
-                    } else {
-                        const fileReader = new FileReader();
-                        fileReader.onload = (e) => {
-                            extractedText = e.target.result;
-                            callGemini(extractedText, selectedFile.name);
-                        };
-                        fileReader.readAsText(selectedFile);
-                    }
-                } catch (err) {
-                    console.error("File read error:", err);
-                    message.textContent = `Error reading file: ${err.message}`;
-                    message.className = 'mt-4 text-sm text-red-600 dark:text-red-400';
-                    uploadBtn.disabled = false;
-                    uploadBtn.textContent = 'Upload & Generate';
-                }
-            }
-            
-            async function callGemini(text, sourceFileName) {
-                if (text.length < 50) {
-                    message.textContent = 'File does not contain enough text to process.';
-                    message.className = 'mt-4 text-sm text-red-600 dark:text-red-400';
-                    uploadBtn.disabled = false;
-                    uploadBtn.textContent = 'Upload & Generate';
-                    return;
-                }
-                
-                message.textContent = 'File read. Asking AI to create flashcards... (this may take a moment)';
-                uploadBtn.textContent = 'Generating...';
-
-                const prompt = `
-                    You are an expert study assistant.
-                    Analyze the following text and extract the most important key terms and their definitions.
-                    Return your answer as a valid JSON array of objects, where each object has a "term" and "definition" key.
-                    
-                    Example: [{"term": "Mitochondria", "definition": "The powerhouse of the cell."}]
-                    
-                    If you cannot find any good terms, return an empty array [].
-                    Do not return more than 50 cards.
-                    
-                    Text to analyze:
-                    ---
-                    ${text.substring(0, 100000)}
-                    ---
-                `;
-                
-                try {
-                    // 2. Call Google Gemini API
-                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
-                    
-                    const payload = {
-                        contents: [{ parts: [{ text: prompt }] }]
-                    };
-                    
-                    const response = await fetch(apiUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`AI API error: ${response.statusText}`);
-                    }
-                    
-                    const result = await response.json();
-                    const aiText = result.candidates[0].content.parts[0].text;
-                    
-                    // Clean the response to make sure it's valid JSON
-                    let jsonText = aiText.trim().replace(/^```json|```$/g, "").trim();
-                    
-                    const cards = JSON.parse(jsonText);
-
-                    if (cards.length === 0) {
-                        message.textContent = 'The AI could not find any flashcards in that text.';
-                        message.className = 'mt-4 text-sm text-yellow-600 dark:text-yellow-400';
-                        uploadBtn.disabled = false;
-                        uploadBtn.textContent = 'Upload & Generate';
-                        return;
-                    }
-                    
-                    // 3. Save the new set to Firestore
-                    message.textContent = 'AI complete! Saving new set...';
-                    const newSet = {
-                      title: `AI Set: ${sourceFileName}`,
-                      description: `Generated from file: ${sourceFileName}`,
-                      ownerId: globalUser.uid,
-                      ownerEmail: globalUser.email,
-                      isPublic: false,
-                      cards: cards,
-                      createdAt: serverTimestamp(),
-                      updatedAt: serverTimestamp(),
-                    };
-                    
-                    const docRef = await addDoc(collection(db, "studySets"), newSet);
-                    console.log(`Successfully created new study set with ID: ${docRef.id}`);
-                    
-                    message.textContent = 'Success! Your new set is on the dashboard.';
-                    message.className = 'mt-4 text-sm text-green-600 dark:text-green-400';
-                    
-                    // Reset form
-                    selectedFile = null;
-                    fileName.classList.add('hidden');
-                    fileLabel.textContent = 'Select a file';
-                    fileInput.value = ''; // Clear file input
-                    
-                    setTimeout(() => {
-                        navigate('dashboard');
-                    }, 2000);
-                    
-                } catch (err) {
-                    console.error("Error in AI Function:", err);
-                    message.textContent = `An error occurred: ${err.message}`;
-                    message.className = 'mt-4 text-sm text-red-600 dark:text-red-400';
-                    uploadBtn.disabled = false;
-                    uploadBtn.textContent = 'Upload & Generate';
-                }
-            }
-        }
-        
-        
-        // --- SET EDITOR PAGE ---
-        let editorCards = [{ term: '', definition: '' }];
-        
+        // --- SET EDITOR PAGE (Create & Edit) ---
         function SetEditorHTML(setId = null) {
             const isEditing = setId !== null;
             return `
-                <div class="max-w-4xl mx-auto">
-                  <button id="editor-back-btn" class="flex items-center text-blue-600 dark:text-blue-500 hover:underline mb-4">
+                <div>
+                  <button id="editor-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
                     ${IconBack()}
                     <span class="ml-1">Back to Dashboard</span>
                   </button>
                   
                   <form id="editor-form" class="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-lg shadow-xl">
                     <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">${isEditing ? 'Edit Study Set' : 'Create New Study Set'}</h1>
-            
-                    <div id="editor-loading-state" class="hidden"><p class="text-gray-700 dark:text-gray-300">Loading set editor...</p></div>
-                    <div id="editor-error-state" class="hidden"><p class="text-red-600"></p></div>
                     
-                    <div id="editor-content" class="space-y-6">
-                      <!-- Set Details -->
-                      <div>
-                        <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
-                        <input
-                          type="text"
-                          id="title"
-                          required
-                          class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          placeholder="e.g. Biology - Chapter 1"
-                        />
-                      </div>
-                      <div>
-                        <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-                        <textarea
-                          id="description"
-                          rows="3"
-                          class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                          placeholder="A quick summary of what this set covers"
-                        ></textarea>
-                      </div>
-                      
-                      <!-- Privacy Toggle -->
-                      <div class="flex items-center justify-between">
-                        <span class="flex-grow flex flex-col">
-                          <span class="text-sm font-medium text-gray-900 dark:text-white">Visibility</span>
-                          <span id="visibility-text" class="text-sm text-gray-500 dark:text-gray-400">Only visible to you.</span>
-                        </span>
-                        <button
-                          type="button"
-                          id="visibility-toggle"
-                          class="bg-gray-200 dark:bg-gray-600 relative inline-flex items-center h-6 rounded-full w-11 transition-colors"
-                        >
-                          <span class="sr-only">Toggle Visibility</span>
-                          <span
-                            id="visibility-knob"
-                            class="translate-x-1 inline-block w-4 h-4 transform bg-white rounded-full transition-transform"
-                          />
-                        </button>
-                      </div>
-            
-                      <!-- Cards Section -->
-                      <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
-                        <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Flashcards</h2>
-                        <div id="cards-container" class="space-y-4">
-                          <!-- Cards will be rendered here by JS -->
-                        </div>
-                        
-                        <button
-                          type="button"
-                          id="add-card-btn"
-                          class="mt-4 inline-flex items-center px-4 py-2 border border-dashed border-gray-400 dark:border-gray-500 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                        >
-                          ${IconPlus()}
-                          <span class="ml-2">Add Card</span>
-                        </button>
-                      </div>
+                    <!-- Loading State -->
+                    <div id="editor-loading" class="hidden">
+                        <p class="text-gray-700 dark:text-gray-300">Loading set editor...</p>
                     </div>
-            
-                    <p id="editor-form-error" class="text-red-600 mt-4 hidden"></p>
+
+                    <!-- Error State -->
+                    <div id="editor-error" class="hidden">
+                        <p class="text-red-600"></p>
+                    </div>
                     
-                    <!-- Action Buttons -->
-                    <div class="flex items-center justify-between mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
-                      <div>
-                        ${isEditing ? `
+                    <!-- Form Content -->
+                    <div id="editor-content">
+                        <div class="space-y-6">
+                          <!-- Set Details -->
+                          <div>
+                            <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+                            <input
+                              type="text"
+                              id="title"
+                              required
+                              class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              placeholder="e.g. Biology - Chapter 1"
+                            />
+                          </div>
+                          <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                            <textarea
+                              id="description"
+                              rows="3"
+                              class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              placeholder="A quick summary of what this set covers"
+                            ></textarea>
+                          </div>
+                          
+                          <!-- Privacy Toggle -->
+                          <div class="flex items-center justify-between">
+                            <span class="flex-grow flex flex-col">
+                              <span class="text-sm font-medium text-gray-900 dark:text-white">Visibility</span>
+                              <span id="privacy-label" class="text-sm text-gray-500 dark:text-gray-400">Only visible to you.</span>
+                            </span>
+                            <button
+                              type="button"
+                              id="privacy-toggle"
+                              class="bg-gray-200 dark:bg-gray-700 relative inline-flex items-center h-6 rounded-full w-11 transition-colors"
+                            >
+                              <span class="sr-only">Toggle Visibility</span>
+                              <span
+                                id="privacy-toggle-knob"
+                                class="translate-x-1 inline-block w-4 h-4 transform bg-white dark:bg-gray-300 rounded-full transition-transform"
+                              />
+                            </button>
+                          </div>
+
+                          <!-- Cards Section -->
+                          <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Flashcards</h2>
+                            
+                            <div id="cards-container" class="space-y-4">
+                              <!-- Cards will be injected here by JS -->
+                            </div>
+                            
+                            <button
+                              type="button"
+                              id="add-card-btn"
+                              class="mt-4 inline-flex items-center px-4 py-2 border border-dashed border-gray-400 dark:border-gray-500 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                              ${IconPlus()}
+                              <span class="ml-2">Add Card</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <p id="form-error" class="text-red-600 mt-4 hidden"></p>
+                        
+                        <!-- Action Buttons -->
+                        <div class="flex items-center justify-between mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+                          <div>
+                            ${isEditing ? `
+                              <button
+                                type="button"
+                                id="delete-set-btn"
+                                class="text-sm font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                              >
+                                Delete Set
+                              </button>
+                            ` : ''}
+                          </div>
                           <button
-                            type="button"
-                            id="delete-set-btn"
-                            class="text-sm font-medium text-red-600 hover:text-red-800 dark:hover:text-red-400"
+                            type="submit"
+                            id="submit-set-btn"
+                            class="px-6 py-2 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
                           >
-                            Delete Set
+                            ${isEditing ? 'Update Set' : 'Create Set'}
                           </button>
-                        ` : `<div></div>`}
-                      </div>
-                      <button
-                        type="submit"
-                        id="editor-submit-btn"
-                        class="px-6 py-2 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                      >
-                        ${isEditing ? 'Update Set' : 'Create Set'}
-                      </button>
+                        </div>
                     </div>
                   </form>
                   
                   <!-- Delete Confirmation Modal -->
-                  <div id="delete-confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+                  <div id="delete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full">
                       <h3 class="text-lg font-medium text-gray-900 dark:text-white">Delete Study Set?</h3>
                       <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Are you sure? This action cannot be undone.</p>
                       <div class="mt-6 flex justify-end space-x-3">
                         <button
                           type="button"
-                          id="delete-cancel-btn"
-                          class="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          id="cancel-delete-btn"
+                          class="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
                         >
                           Cancel
                         </button>
                         <button
                           type="button"
-                          id="delete-confirm-btn"
+                          id="confirm-delete-btn"
                           class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                         >
                           Delete
@@ -1343,122 +1205,170 @@
             `;
         }
         
-        function renderEditorCards() {
-            const container = document.getElementById('cards-container');
-            if (!container) return;
-            
-            container.innerHTML = editorCards.map((card, index) => `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <div>
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Term</label>
-                    <input
-                      type="text"
-                      data-index="${index}"
-                      data-field="term"
-                      value="${card.term}"
-                      class="card-input w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                      placeholder="Term"
-                    />
-                  </div>
-                  <div class="flex">
-                    <div class="flex-grow">
-                      <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Definition</label>
-                      <input
-                        type="text"
-                        data-index="${index}"
-                        data-field="definition"
-                        value="${card.definition}"
-                        class="card-input w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                        placeholder="Definition"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      data-index="${index}"
-                      class="remove-card-btn ml-2 mt-6 p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900 rounded-full h-10 w-10 flex items-center justify-center"
-                      title="Delete card"
-                    >
-                      ${IconTrash()}
-                    </button>
-                  </div>
-                </div>
-            `).join('');
-            
-            // Re-attach listeners for card inputs and remove buttons
-            document.querySelectorAll('.card-input').forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const index = parseInt(e.target.dataset.index);
-                    const field = e.target.dataset.field;
-                    editorCards[index][field] = e.target.value;
-                });
-            });
-            
-            document.querySelectorAll('.remove-card-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    if (editorCards.length <= 1) {
-                        alert("You must have at least one card.");
-                        return;
-                    }
-                    const index = parseInt(e.currentTarget.dataset.index);
-                    editorCards.splice(index, 1);
-                    renderEditorCards(); // Re-render the card list
-                });
-            });
-        }
-        
-        async function attachSetEditorListeners(setId = null) {
+        function attachSetEditorListeners(setId = null) {
             const isEditing = setId !== null;
+            let currentCards = [{ term: '', definition: '' }];
             let isPublic = false;
 
             // Get all elements
             const backBtn = document.getElementById('editor-back-btn');
-            const form = document.getElementById('editor-form');
-            const loadingState = document.getElementById('editor-loading-state');
-            const errorState = document.getElementById('editor-error-state');
-            const content = document.getElementById('editor-content');
+            const editorForm = document.getElementById('editor-form');
+            const loadingEl = document.getElementById('editor-loading');
+            const errorEl = document.getElementById('editor-error');
+            const contentEl = document.getElementById('editor-content');
+            
             const titleInput = document.getElementById('title');
             const descriptionInput = document.getElementById('description');
-            const visibilityText = document.getElementById('visibility-text');
-            const visibilityToggle = document.getElementById('visibility-toggle');
-            const visibilityKnob = document.getElementById('visibility-knob');
+            
+            const privacyToggle = document.getElementById('privacy-toggle');
+            const privacyToggleKnob = document.getElementById('privacy-toggle-knob');
+            const privacyLabel = document.getElementById('privacy-label');
+            
+            const cardsContainer = document.getElementById('cards-container');
             const addCardBtn = document.getElementById('add-card-btn');
-            const formError = document.getElementById('editor-form-error');
-            const submitBtn = document.getElementById('editor-submit-btn');
+            const formError = document.getElementById('form-error');
             
-            backBtn.addEventListener('click', () => navigate('dashboard'));
+            const submitBtn = document.getElementById('submit-set-btn');
+            const deleteBtn = document.getElementById('delete-set-btn');
+            const deleteModal = document.getElementById('delete-modal');
+            const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+            const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
             
-            // Visibility Toggle
-            visibilityToggle.addEventListener('click', () => {
+            // --- Helper function to render cards ---
+            function renderCards() {
+                cardsContainer.innerHTML = '';
+                currentCards.forEach((card, index) => {
+                    cardsContainer.innerHTML += `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg" id="card-${index}">
+                          <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Term</label>
+                            <input
+                              type="text"
+                              value="${card.term.replace(/"/g, '&quot;')}"
+                              class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              placeholder="Term"
+                              data-index="${index}"
+                              data-field="term"
+                            />
+                          </div>
+                          <div class="flex">
+                            <div class="flex-grow">
+                              <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Definition</label>
+                              <input
+                                type="text"
+                                value="${card.definition.replace(/"/g, '&quot;')}"
+                                class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                placeholder="Definition"
+                                data-index="${index}"
+                                data-field="definition"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              data-index="${index}"
+                              class="remove-card-btn ml-2 mt-6 p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-gray-700 rounded-full h-10 w-10 flex items-center justify-center"
+                              title="Delete card"
+                            >
+                              ${IconTrash()}
+                            </button>
+                          </div>
+                        </div>
+                    `;
+                });
+                
+                // Re-attach listeners for inputs and remove buttons
+                cardsContainer.querySelectorAll('input').forEach(input => {
+                    input.addEventListener('change', (e) => {
+                        const { index, field } = e.target.dataset;
+                        currentCards[index][field] = e.target.value;
+                    });
+                });
+                
+                cardsContainer.querySelectorAll('.remove-card-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        if (currentCards.length <= 1) {
+                            alert("You must have at least one card.");
+                            return;
+                        }
+                        const index = parseInt(e.currentTarget.dataset.index, 10);
+                        currentCards = currentCards.filter((_, i) => i !== index);
+                        renderCards(); // Re-render the cards list
+                    });
+                });
+            }
+
+            // --- Helper function to toggle privacy ---
+            function togglePrivacy() {
                 isPublic = !isPublic;
                 if (isPublic) {
-                    visibilityToggle.classList.remove('bg-gray-200', 'dark:bg-gray-600');
-                    visibilityToggle.classList.add('bg-blue-600', 'dark:bg-blue-500');
-                    visibilityKnob.classList.remove('translate-x-1');
-                    visibilityKnob.classList.add('translate-x-6');
-                    visibilityText.textContent = 'Visible to everyone.';
+                    privacyToggle.classList.remove('bg-gray-200', 'dark:bg-gray-700');
+                    privacyToggle.classList.add('bg-blue-600', 'dark:bg-blue-500');
+                    privacyToggleKnob.classList.remove('translate-x-1');
+                    privacyToggleKnob.classList.add('translate-x-6');
+                    privacyLabel.textContent = "Visible to everyone.";
                 } else {
-                    visibilityToggle.classList.add('bg-gray-200', 'dark:bg-gray-600');
-                    visibilityToggle.classList.remove('bg-blue-600', 'dark:bg-blue-500');
-                    visibilityKnob.classList.add('translate-x-1');
-                    visibilityKnob.classList.remove('translate-x-6');
-                    visibilityText.textContent = 'Only visible to you.';
+                    privacyToggle.classList.add('bg-gray-200', 'dark:bg-gray-700');
+                    privacyToggle.classList.remove('bg-blue-600', 'dark:bg-blue-500');
+                    privacyToggleKnob.classList.add('translate-x-1');
+                    privacyToggleKnob.classList.remove('translate-x-6');
+                    privacyLabel.textContent = "Only visible to you.";
                 }
-            });
+            }
 
-            // Add Card
+            // --- Load data if editing ---
+            if (isEditing) {
+                loadingEl.style.display = 'block';
+                contentEl.style.display = 'none';
+                
+                const fetchSet = async () => {
+                    try {
+                      const docRef = doc(db, "studySets", setId);
+                      const docSnap = await getDoc(docRef);
+                      if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        if (data.ownerId !== globalUser.uid) {
+                          throw new Error("You don't have permission to edit this set.");
+                        }
+                        titleInput.value = data.title;
+                        descriptionInput.value = data.description || '';
+                        if (data.isPublic) {
+                            togglePrivacy(); // Set to public
+                        }
+                        currentCards = data.cards.length > 0 ? data.cards : [{ term: '', definition: '' }];
+                        renderCards();
+                      } else {
+                        throw new Error("Study set not found.");
+                      }
+                    } catch (err) {
+                        console.error("Error fetching set:", err);
+                        errorEl.textContent = "Failed to load study set: " + err.message;
+                        errorEl.style.display = 'block';
+                    } finally {
+                        loadingEl.style.display = 'none';
+                        contentEl.style.display = 'block';
+                    }
+                };
+                fetchSet();
+            } else {
+                renderCards(); // Render the initial empty card
+            }
+
+            // --- Attach Listeners ---
+            backBtn.addEventListener('click', () => navigate('dashboard'));
+            privacyToggle.addEventListener('click', togglePrivacy);
             addCardBtn.addEventListener('click', () => {
-                editorCards.push({ term: '', definition: '' });
-                renderEditorCards();
+                currentCards.push({ term: '', definition: '' });
+                renderCards();
             });
-
-            // Form Submission
-            form.addEventListener('submit', async (e) => {
+            
+            // Handle form submission
+            editorForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Saving...';
                 formError.classList.add('hidden');
 
-                const finalCards = editorCards.filter(card => card.term.trim() !== '' && card.definition.trim() !== '');
+                const finalCards = currentCards.filter(card => card.term.trim() !== '' && card.definition.trim() !== '');
 
                 if (finalCards.length === 0) {
                     formError.textContent = "You must have at least one valid card with a term and definition.";
@@ -1469,920 +1379,1301 @@
                 }
 
                 const setData = {
-                    title: titleInput.value.trim(),
-                    description: descriptionInput.value.trim(),
-                    isPublic,
-                    ownerId: globalUser.uid,
-                    ownerEmail: globalUser.email,
-                    cards: finalCards,
-                    updatedAt: serverTimestamp(),
+                  title: titleInput.value.trim(),
+                  description: descriptionInput.value.trim(),
+                  isPublic,
+                  ownerId: globalUser.uid,
+                  ownerEmail: globalUser.email,
+                  cards: finalCards,
+                  updatedAt: serverTimestamp(),
                 };
 
                 try {
-                    if (isEditing) {
-                        const docRef = doc(db, "studySets", setId);
-                        await updateDoc(docRef, setData);
-                    } else {
-                        setData.createdAt = serverTimestamp();
-                        await addDoc(collection(db, "studySets"), setData);
-                    }
-                    navigate('dashboard');
+                  if (isEditing) {
+                    const docRef = doc(db, "studySets", setId);
+                    await updateDoc(docRef, setData);
+                  } else {
+                    setData.createdAt = serverTimestamp();
+                    await addDoc(collection(db, "studySets"), setData);
+                  }
+                  navigate('dashboard');
                 } catch (err) {
-                    console.error("Error saving set:", err);
-                    formError.textContent = "Failed to save set: " + err.message;
-                    formError.classList.remove('hidden');
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = isEditing ? 'Update Set' : 'Create Set';
+                  console.error("Error saving set:", err);
+                  formError.textContent = "Failed to save set: " + err.message;
+                  formError.classList.remove('hidden');
+                  submitBtn.disabled = false;
+                  submitBtn.textContent = isEditing ? 'Update Set' : 'Create Set';
                 }
             });
-
-            // Delete Button (if editing)
+            
+            // Modal listeners (if they exist)
             if (isEditing) {
-                const deleteSetBtn = document.getElementById('delete-set-btn');
-                const deleteModal = document.getElementById('delete-confirm-modal');
-                const deleteCancelBtn = document.getElementById('delete-cancel-btn');
-                const deleteConfirmBtn = document.getElementById('delete-confirm-btn');
-
-                deleteSetBtn.addEventListener('click', () => deleteModal.classList.remove('hidden'));
-                deleteCancelBtn.addEventListener('click', () => deleteModal.classList.add('hidden'));
-                
-                deleteConfirmBtn.addEventListener('click', async () => {
-                    deleteConfirmBtn.disabled = true;
-                    deleteConfirmBtn.textContent = 'Deleting...';
+                deleteBtn.addEventListener('click', () => deleteModal.classList.remove('hidden'));
+                cancelDeleteBtn.addEventListener('click', () => deleteModal.classList.add('hidden'));
+                confirmDeleteBtn.addEventListener('click', async () => {
+                    confirmDeleteBtn.disabled = true;
+                    confirmDeleteBtn.textContent = 'Deleting...';
                     try {
-                        const docRef = doc(db, "studySets", setId);
-                        await deleteDoc(docRef);
-                        navigate('dashboard');
+                      const docRef = doc(db, "studySets", setId);
+                      await deleteDoc(docRef);
+                      navigate('dashboard');
                     } catch (err) {
-                        console.error("Error deleting set:", err);
-                        formError.textContent = "Failed to delete set: " + err.message;
-                        formError.classList.remove('hidden');
-                        deleteConfirmBtn.disabled = false;
-                        deleteConfirmBtn.textContent = 'Delete';
-                        deleteModal.classList.add('hidden');
+                      console.error("Error deleting set:", err);
+                      formError.textContent = "Failed to delete set: " + err.message;
+                      formError.classList.remove('hidden');
+                      confirmDeleteBtn.disabled = false;
+                      confirmDeleteBtn.textContent = 'Delete';
+                      deleteModal.classList.add('hidden');
                     }
                 });
             }
-
-            // Load data if editing
-            if (isEditing) {
-                loadingState.classList.remove('hidden');
-                content.classList.add('hidden');
-                
-                try {
-                    const docRef = doc(db, "studySets", setId);
-                    const docSnap = await getDoc(docRef);
-                    
-                    if (docSnap.exists()) {
-                        const data = docSnap.data();
-                        if (data.ownerId !== globalUser.uid) {
-                            throw new Error("You don't have permission to edit this set.");
-                        }
-                        titleInput.value = data.title;
-                        descriptionInput.value = data.description || '';
-                        if (data.isPublic) {
-                            visibilityToggle.click(); // Simulate click to set state
-                        }
-                        editorCards = data.cards.length > 0 ? data.cards : [{ term: '', definition: '' }];
-                    } else {
-                        throw new Error("Study set not found.");
-                    }
-                } catch (err) {
-                    console.error("Error fetching set:", err);
-                    errorState.classList.remove('hidden');
-                    errorState.querySelector('p').textContent = err.message;
-                    loadingState.classList.add('hidden');
-                } finally {
-                    loadingState.classList.add('hidden');
-                    content.classList.remove('hidden');
-                    renderEditorCards();
-                }
-            } else {
-                // It's a new set, just render the initial empty card
-                editorCards = [{ term: '', definition: '' }];
-                content.classList.remove('hidden');
-                renderEditorCards();
-            }
         }
         
-        // --- STUDY PAGE ---
+        // --- STUDY PAGE (Flashcards) ---
         function StudyPageHTML(setId) {
             return `
-                <div class="max-w-3xl mx-auto" id="study-page-container">
-                  <p class="text-gray-700 dark:text-gray-300">Loading study set...</p>
-                </div>
-                
-                <!-- Completion Modal -->
-                <div id="study-complete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-                  <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full text-center">
-                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Set Complete!</h3>
-                    <p class="mt-4 text-lg text-gray-600 dark:text-gray-400" id="study-complete-message"></p>
-                    <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                      <button
-                        type="button"
-                        id="study-restart-btn"
-                        class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700"
-                      >
-                        Study Again
-                      </button>
-                      <button
-                        type="button"
-                        id="study-back-btn"
-                        class="px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-                      >
-                        Back to Dashboard
-                      </button>
+                <div class="max-w-3xl mx-auto">
+                    <button id="study-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
+                        ${IconBack()}
+                        <span class="ml-1">Back to Dashboard</span>
+                    </button>
+                    
+                    <div id="study-content">
+                        <!-- Loading State -->
+                        <div id="study-loading">
+                            <p class="text-gray-700 dark:text-gray-300">Loading study set...</p>
+                        </div>
+                        
+                        <!-- Error State -->
+                        <div id="study-error" class="hidden">
+                            <p class="text-red-600"></p>
+                        </div>
+                        
+                        <!-- Main Content -->
+                        <div id="study-main" class="hidden">
+                            <h1 id="study-title" class="text-3xl font-bold text-gray-900 dark:text-white mb-2"></h1>
+                            <p id="study-progress" class="text-lg text-gray-600 dark:text-gray-400 mb-6"></p>
+
+                            <!-- Progress Bar -->
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
+                              <div id="study-progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                            
+                            <!-- Flashcard -->
+                            <div id="flashcard-flipper" class="card-flipper w-full h-96 mb-6">
+                                <div id="flashcard-inner" class="card-inner relative w-full h-full">
+                                  <!-- Front of Card (Term) -->
+                                  <div class="card-front absolute w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6">
+                                    <p id="card-term" class="text-3xl md:text-4xl font-semibold text-gray-900 dark:text-white text-center"></p>
+                                  </div>
+                                  <!-- Back of Card (Definition) -->
+                                  <div class="card-back absolute w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6">
+                                    <p id="card-definition" class="text-2xl md:text-3xl font-medium text-gray-800 dark:text-gray-300 text-center"></p>
+                                  </div>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center text-gray-500 dark:text-gray-400 text-sm mb-6">Click card to flip</div>
+
+                            <!-- Navigation Controls -->
+                            <div class="flex items-center justify-between mb-6">
+                              <button id="card-prev-btn" class="p-4 rounded-full bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Previous Card">
+                                ${IconPrev()}
+                              </button>
+                              
+                              <button id="card-flip-btn" class="flex items-center px-6 py-3 rounded-lg bg-white dark:bg-gray-800 shadow-md font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700" title="Flip Card">
+                                ${IconFlip()}
+                                <span class="ml-2">Flip</span>
+                              </button>
+                              
+                              <button id="card-next-btn" class="p-4 rounded-full bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700" title="Next Card">
+                                ${IconNext()}
+                              </button>
+                            </div>
+                            
+                            <!-- Known/Unknown Button -->
+                             <button id="card-known-btn" class="w-full py-4 rounded-lg font-bold text-lg transition-colors bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300 dark:hover:bg-green-800">
+                                Mark as Known
+                              </button>
+                        </div>
                     </div>
-                  </div>
+                    
+                    <!-- Completion Modal -->
+                    <div id="study-complete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+                      <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+                        <div id="confetti-container" class="absolute top-0 left-0 w-full h-full"></div>
+                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Set Complete!</h3>
+                        <p id="study-complete-message" class="mt-4 text-lg text-gray-600 dark:text-gray-400"></p>
+                        <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                          <button
+                            type="button"
+                            id="study-restart-btn"
+                            class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700"
+                          >
+                            Study Again
+                          </button>
+                          <button
+                            type="button"
+                            id="study-complete-back-btn"
+                            class="px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            Back to Dashboard
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                 </div>
             `;
         }
         
-        async function attachStudyListeners(setId) {
-            const container = document.getElementById('study-page-container');
-            let set = null;
+        function attachStudyListeners(setId) {
+            let currentSet = null;
             let currentIndex = 0;
             let isFlipped = false;
             let knownCards = new Set();
-            let showComplete = false;
+            
+            // Get all elements
+            const backBtn = document.getElementById('study-back-btn');
+            const loadingEl = document.getElementById('study-loading');
+            const errorEl = document.getElementById('study-error');
+            const mainEl = document.getElementById('study-main');
+            
+            const titleEl = document.getElementById('study-title');
+            const progressEl = document.getElementById('study-progress');
+            const progressBar = document.getElementById('study-progress-bar');
+            
+            const flipper = document.getElementById('flashcard-flipper');
+            const flipperInner = document.getElementById('flashcard-inner');
+            const termEl = document.getElementById('card-term');
+            const definitionEl = document.getElementById('card-definition');
+            
+            const prevBtn = document.getElementById('card-prev-btn');
+            const flipBtn = document.getElementById('card-flip-btn');
+            const nextBtn = document.getElementById('card-next-btn');
+            const knownBtn = document.getElementById('card-known-btn');
+            
+            const completeModal = document.getElementById('study-complete-modal');
+            const completeMsg = document.getElementById('study-complete-message');
+            const restartBtn = document.getElementById('study-restart-btn');
+            const completeBackBtn = document.getElementById('study-complete-back-btn');
 
-            try {
-                const docRef = doc(db, "studySets", setId);
-                const docSnap = await getDoc(docRef);
+            function showCard(index) {
+                const card = currentSet.cards[index];
+                termEl.textContent = card.term;
+                definitionEl.textContent = card.definition;
+                progressEl.textContent = `${index + 1} / ${currentSet.cards.length}`;
                 
-                if (docSnap.exists()) {
-                    set = { id: docSnap.id, ...docSnap.data() };
-                    renderStudyUI();
+                if (knownCards.has(card.term)) {
+                    knownBtn.textContent = 'Mark as Unknown';
+                    knownBtn.classList.remove('bg-green-100', 'text-green-700', 'hover:bg-green-200', 'dark:bg-green-900', 'dark:text-green-300', 'dark:hover:bg-green-800');
+                    knownBtn.classList.add('bg-red-100', 'text-red-700', 'hover:bg-red-200', 'dark:bg-red-900', 'dark:text-red-300', 'dark:hover:bg-red-800');
                 } else {
-                    throw new Error("Study set not found.");
-                }
-            } catch (err) {
-                console.error("Error fetching set:", err);
-                container.innerHTML = `<p class="text-red-600">${err.message}</p>
-                    <button id="back-to-dash" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">Back to Dashboard</button>`;
-                document.getElementById('back-to-dash').addEventListener('click', () => navigate('dashboard'));
-            }
-            
-            function renderStudyUI() {
-                if (showComplete) {
-                    const modal = document.getElementById('study-complete-modal');
-                    document.getElementById('study-complete-message').textContent = `You've marked all ${set.cards.length} cards as known.`;
-                    modal.classList.remove('hidden');
-                    
-                    document.getElementById('study-restart-btn').addEventListener('click', restart);
-                    document.getElementById('study-back-btn').addEventListener('click', () => navigate('dashboard'));
-                    return;
+                    knownBtn.textContent = 'Mark as Known';
+                    knownBtn.classList.add('bg-green-100', 'text-green-700', 'hover:bg-green-200', 'dark:bg-green-900', 'dark:text-green-300', 'dark:hover:bg-green-800');
+                    knownBtn.classList.remove('bg-red-100', 'text-red-700', 'hover:bg-red-200', 'dark:bg-red-900', 'dark:text-red-300', 'dark:hover:bg-red-800');
                 }
                 
-                const currentCard = set.cards[currentIndex];
-                const isKnown = knownCards.has(currentCard.term);
-                const progressPercent = (knownCards.size / set.cards.length) * 100;
+                const progressPercent = (knownCards.size / currentSet.cards.length) * 100;
+                progressBar.style.width = `${progressPercent}%`;
+            }
 
-                container.innerHTML = `
-                    <button id="study-page-back" class="flex items-center text-blue-600 dark:text-blue-500 hover:underline mb-4">
-                      ${IconBack()}
-                      <span class="ml-1">Back to Dashboard</span>
-                    </button>
-                    
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">${set.title}</h1>
-                    <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">${currentIndex + 1} / ${set.cards.length}</p>
-              
-                    <!-- Progress Bar -->
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
-                      <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progressPercent}%"></div>
-                    </div>
-                    
-                    <!-- Flashcard -->
-                    <div 
-                      id="flashcard"
-                      class="w-full h-96 card-flipper mb-6"
-                    >
-                      <div 
-                        class="card-inner relative w-full h-full"
-                      >
-                        <!-- Front of Card (Term) -->
-                        <div class="card-front absolute w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6">
-                          <p class="text-3xl md:text-4xl font-semibold text-gray-900 dark:text-white text-center">${currentCard.term}</p>
-                        </div>
-                        <!-- Back of Card (Definition) -->
-                        <div class="card-back absolute w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6">
-                          <p class="text-2xl md:text-3xl font-medium text-gray-800 dark:text-gray-200 text-center">${currentCard.definition}</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div class="text-center text-gray-500 dark:text-gray-400 text-sm mb-6">Click card to flip</div>
-              
-                    <!-- Navigation Controls -->
-                    <div class="flex items-center justify-between mb-6">
-                      <button
-                        id="prev-card"
-                        class="p-4 rounded-full bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
-                        title="Previous Card"
-                      >
-                        ${IconPrev()}
-                      </button>
-                      
-                      <button
-                        id="flip-card"
-                        class="flex items-center px-6 py-3 rounded-lg bg-white dark:bg-gray-800 shadow-md font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                        title="Flip Card"
-                      >
-                        ${IconFlip()}
-                        <span class="ml-2">Flip</span>
-                      </button>
-                      
-                      <button
-                        id="next-card"
-                        class="p-4 rounded-full bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200"
-                        title="Next Card"
-                      >
-                        ${IconNext()}
-                      </button>
-                    </div>
-                    
-                    <!-- Known/Unknown Button -->
-                     <button
-                      id="toggle-known"
-                      class="w-full py-4 rounded-lg font-bold text-lg transition-colors ${
-                        isKnown
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300 dark:hover:bg-red-800'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300 dark:hover:bg-green-800'
-                      }"
-                    >
-                      ${isKnown ? 'Mark as Unknown' : 'Mark as Known'}
-                    </button>
-                `;
-                
-                // Re-attach listeners for this view
-                document.getElementById('study-page-back').addEventListener('click', () => navigate('dashboard'));
-                
-                const card = document.getElementById('flashcard');
-                card.addEventListener('click', handleFlip);
-                
-                document.getElementById('flip-card').addEventListener('click', handleFlip);
-                document.getElementById('prev-card').addEventListener('click', prevCard);
-                document.getElementById('next-card').addEventListener('click', nextCard);
-                document.getElementById('toggle-known').addEventListener('click', toggleKnown);
-                
-                if (isFlipped) {
-                    card.classList.add('card-flipped');
-                }
-            }
-            
-            function handleFlip() {
+            function doFlip() {
                 isFlipped = !isFlipped;
-                const card = document.getElementById('flashcard');
                 if (isFlipped) {
-                    card.classList.add('card-flipped');
+                    flipperInner.classList.add('card-flipped');
                 } else {
-                    card.classList.remove('card-flipped');
+                    flipperInner.classList.remove('card-flipped');
                 }
             }
-            
-            function nextCard() {
-                isFlipped = false;
-                if (currentIndex < set.cards.length - 1) {
-                    setCurrentIndex(currentIndex + 1);
-                } else {
+
+            function doNextCard() {
+                if (isFlipped) doFlip();
+                
+                setTimeout(() => {
+                  if (currentIndex < currentSet.cards.length - 1) {
+                    currentIndex++;
+                    showCard(currentIndex);
+                  } else {
                     // Reached end, check for completion
-                    if (knownCards.size === set.cards.length) {
-                        showComplete = true;
-                        // Trigger confetti
+                    if (knownCards.size === currentSet.cards.length) {
+                        completeMsg.textContent = `You've marked all ${currentSet.cards.length} cards as known.`;
+                        completeModal.classList.remove('hidden');
                         confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
                     } else {
-                        setCurrentIndex(0); // Loop back to start
+                        currentIndex = 0; // Loop back to start
+                        showCard(currentIndex);
                     }
-                }
-                renderStudyUI();
+                  }
+                }, 150); // Small delay to allow CSS to reset
             }
 
-            function prevCard() {
-                isFlipped = false;
-                if (currentIndex > 0) {
-                    setCurrentIndex(currentIndex - 1);
-                } else {
-                    setCurrentIndex(set.cards.length - 1); // Loop to end
-                }
-                renderStudyUI();
+            function doPrevCard() {
+                if (isFlipped) doFlip();
+                setTimeout(() => {
+                  if (currentIndex > 0) {
+                    currentIndex--;
+                  } else {
+                    currentIndex = currentSet.cards.length - 1; // Loop to end
+                  }
+                  showCard(currentIndex);
+                }, 150);
             }
-            
+
             function toggleKnown() {
-                const cardKey = set.cards[currentIndex].term;
-                
+                const cardKey = currentSet.cards[currentIndex].term;
                 if (knownCards.has(cardKey)) {
                     knownCards.delete(cardKey);
                 } else {
                     knownCards.add(cardKey);
                 }
                 
-                // Auto-advance to next card if marked as known
                 if (knownCards.has(cardKey)) {
-                    // Check for completion right here
-                    if (knownCards.size === set.cards.length) {
-                        showComplete = true;
-                        // Trigger confetti
-                        confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
-                        renderStudyUI();
-                    } else {
-                        nextCard();
-                    }
+                    doNextCard();
                 } else {
-                    renderStudyUI();
+                    showCard(currentIndex); // Just update the button
                 }
             }
-
-            function restart() {
+            
+            function doRestart() {
                 currentIndex = 0;
                 isFlipped = false;
                 knownCards = new Set();
-                showComplete = false;
-                document.getElementById('study-complete-modal').classList.add('hidden');
-                renderStudyUI();
+                completeModal.classList.add('hidden');
+                showCard(currentIndex);
             }
+
+            // --- Load data ---
+            const fetchSet = async () => {
+                try {
+                  const docRef = doc(db, "studySets", setId);
+                  const docSnap = await getDoc(docRef);
+                  if (docSnap.exists()) {
+                    currentSet = { id: docSnap.id, ...docSnap.data() };
+                    titleEl.textContent = currentSet.title;
+                    showCard(0);
+                    mainEl.classList.remove('hidden');
+                  } else {
+                    throw new Error("Study set not found.");
+                  }
+                } catch (err) {
+                  console.error("Error fetching set:", err);
+                  errorEl.textContent = "Failed to load study set: " + err.message;
+                  errorEl.classList.remove('hidden');
+                } finally {
+                  loadingEl.classList.add('hidden');
+                }
+            };
+            fetchSet();
+
+            // --- Attach Listeners ---
+            backBtn.addEventListener('click', () => navigate('dashboard'));
+            flipper.addEventListener('click', doFlip);
+            flipBtn.addEventListener('click', doFlip);
+            prevBtn.addEventListener('click', doPrevCard);
+            nextBtn.addEventListener('click', doNextCard);
+            knownBtn.addEventListener('click', toggleKnown);
+            
+            restartBtn.addEventListener('click', doRestart);
+            completeBackBtn.addEventListener('click', () => navigate('dashboard'));
         }
         
         // --- QUIZ PAGE ---
-        let quizQuestions = [];
-        let currentQuizIndex = 0;
-        let quizScore = 0;
-        
         function QuizPageHTML(setId) {
             return `
-                <div class="max-w-3xl mx-auto" id="quiz-page-container">
-                  <p class="text-gray-700 dark:text-gray-300">Loading quiz...</p>
-                </div>
-                
-                <!-- Quiz Completion Modal -->
-                <div id="quiz-complete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-                  <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full text-center">
-                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Quiz Complete!</h3>
-                    <p class="mt-4 text-3xl font-bold text-gray-800 dark:text-white" id="quiz-score-display"></p>
-                    <p class="mt-2 text-lg text-gray-600 dark:text-gray-400" id="quiz-score-message"></p>
-                    <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                      <button
-                        type="button"
-                        id="quiz-restart-btn"
-                        class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700"
-                      >
-                        Try Again
-                      </button>
-                      <button
-                        type="button"
-                        id="quiz-back-btn"
-                        class="px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-                      >
-                        Back to Dashboard
-                      </button>
-                    </div>
-                  </div>
-                </div>
-            `;
-        }
-        
-        function shuffleArray(array) {
-            for (let i = array.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[j], array[i]];
-            }
-            return array;
-        }
-        
-        function generateQuiz(cards) {
-            quizQuestions = [];
-            
-            // Create a "pool" of wrong answers
-            const definitionsPool = cards.map(card => card.definition);
-            
-            for (const card of cards) {
-                const question = card.term;
-                const correctAnswer = card.definition;
-                
-                // Get 3 random wrong answers from the pool
-                let wrongAnswers = [];
-                const tempPool = definitionsPool.filter(d => d !== correctAnswer);
-                shuffleArray(tempPool);
-                
-                wrongAnswers = tempPool.slice(0, 3);
-                
-                // Create 4 options and shuffle them
-                const options = shuffleArray([
-                    { text: correctAnswer, correct: true },
-                    { text: wrongAnswers[0], correct: false },
-                    { text: wrongAnswers[1], correct: false },
-                    { text: wrongAnswers[2], correct: false },
-                ]);
-                
-                quizQuestions.push({ question, options });
-            }
-            
-            // Shuffle the final question list
-            shuffleArray(quizQuestions);
-            currentQuizIndex = 0;
-            quizScore = 0;
-        }
-        
-        async function attachQuizListeners(setId) {
-            const container = document.getElementById('quiz-page-container');
-            
-            try {
-                const docRef = doc(db, "studySets", setId);
-                const docSnap = await getDoc(docRef);
-                
-                if (docSnap.exists()) {
-                    const set = docSnap.data();
-                    if (set.cards.length < 4) {
-                        throw new Error("Quiz requires at least 4 cards.");
-                    }
-                    generateQuiz(set.cards);
-                    renderQuizQuestion();
-                } else {
-                    throw new Error("Study set not found.");
-                }
-            } catch (err) {
-                console.error("Error loading quiz:", err);
-                container.innerHTML = `<p class="text-red-600">${err.message}</p>
-                    <button id="back-to-dash" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">Back to Dashboard</button>`;
-                document.getElementById('back-to-dash').addEventListener('click', () => navigate('dashboard'));
-            }
-        }
-        
-        function renderQuizQuestion(feedback = null, selectedOption = -1, correctOption = -1) {
-            const container = document.getElementById('quiz-page-container');
-            if (currentQuizIndex >= quizQuestions.length) {
-                // Quiz is over!
-                showQuizResults();
-                return;
-            }
-            
-            const q = quizQuestions[currentQuizIndex];
-            const progressPercent = ((currentQuizIndex) / quizQuestions.length) * 100;
-            
-            container.innerHTML = `
-                <button id="quiz-page-back" class="flex items-center text-blue-600 dark:text-blue-500 hover:underline mb-4">
-                  ${IconBack()}
-                  <span class="ml-1">Back to Dashboard</span>
-                </button>
-                
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Quiz Time!</h1>
-                <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">Question ${currentQuizIndex + 1} / ${quizQuestions.length}</p>
-          
-                <!-- Progress Bar -->
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
-                  <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progressPercent}%"></div>
-                </div>
-                
-                <!-- Question -->
-                <div class="w-full min-h-[10rem] bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6 mb-8">
-                  <p class="text-3xl md:text-4xl font-semibold text-gray-900 dark:text-white text-center">${q.question}</p>
-                </div>
-                
-                <!-- Options -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="quiz-options">
-                    ${q.options.map((option, index) => `
-                        <button 
-                            class="quiz-option p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg text-lg font-medium text-gray-800 dark:text-gray-200 text-left hover:shadow-xl hover:ring-2 hover:ring-blue-500 transition-all ${
-                                feedback && index === correctOption ? 'bg-green-100 dark:bg-green-900 ring-2 ring-green-500' : ''
-                            } ${
-                                feedback === 'incorrect' && index === selectedOption ? 'bg-red-100 dark:bg-red-900 ring-2 ring-red-500' : ''
-                            }"
-                            data-index="${index}"
-                            ${feedback ? 'disabled' : ''}
-                        >
-                            ${option.text}
-                        </button>
-                    `).join('')}
-                </div>
-                
-                <!-- Feedback & Next Button -->
-                <div id="feedback-container" class="mt-6 h-16">
-                    ${feedback ? `
-                        <div class="text-center">
-                            <p class="text-2xl font-bold ${feedback === 'correct' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
-                                ${feedback === 'correct' ? 'Correct!' : 'Incorrect'}
-                            </p>
-                            <button id="next-question-btn" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-md">Next</button>
+                <div class="max-w-3xl mx-auto">
+                    <button id="quiz-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
+                        ${IconBack()}
+                        <span class="ml-1">Back to Dashboard</span>
+                    </button>
+                    
+                    <div id="quiz-content">
+                        <!-- Loading State -->
+                        <div id="quiz-loading">
+                            <p class="text-gray-700 dark:text-gray-300">Loading quiz...</p>
                         </div>
-                    ` : ''}
+                        
+                        <!-- Error State -->
+                        <div id="quiz-error" class="hidden">
+                            <p class="text-red-600"></p>
+                        </div>
+                        
+                        <!-- Main Content -->
+                        <div id="quiz-main" class="hidden">
+                            <h1 id="quiz-title" class="text-3xl font-bold text-gray-900 dark:text-white mb-2"></h1>
+                            <div class="flex justify-between items-center mb-6">
+                                <p id="quiz-progress" class="text-lg text-gray-600 dark:text-gray-400"></p>
+                                <p id="quiz-score" class="text-lg font-semibold text-gray-800 dark:text-white"></p>
+                            </div>
+                            
+                            <!-- Question Card -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 mb-8 min-h-[150px] flex items-center justify-center">
+                                <p id="quiz-question" class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white text-center"></p>
+                            </div>
+                            
+                            <!-- Options -->
+                            <div id="quiz-options" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Options will be injected by JS -->
+                            </div>
+                            
+                            <!-- Feedback & Next Button -->
+                            <div id="quiz-feedback" class="mt-6 hidden">
+                                <p id="feedback-text" class="text-xl font-medium"></p>
+                                <button id="next-question-btn" class="mt-4 w-full px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Completion Modal -->
+                    <div id="quiz-complete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+                      <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+                        <div id="confetti-container-quiz" class="absolute top-0 left-0 w-full h-full"></div>
+                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Quiz Complete!</h3>
+                        <p class="mt-4 text-3xl font-bold" id="quiz-final-score"></p>
+                        <p class="mt-2 text-lg text-gray-600 dark:text-gray-400" id="quiz-final-message"></p>
+                        <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                          <button
+                            type="button"
+                            id="quiz-restart-btn"
+                            class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700"
+                          >
+                            Try Again
+                          </button>
+                          <button
+                            type="button"
+                            id="quiz-complete-back-btn"
+                            class="px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            Back to Dashboard
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                 </div>
             `;
-            
-            // Attach listeners
-            document.getElementById('quiz-page-back').addEventListener('click', () => navigate('dashboard'));
-            
-            if (feedback) {
-                document.getElementById('next-question-btn').addEventListener('click', () => {
-                    currentQuizIndex++;
-                    renderQuizQuestion();
-                });
-            } else {
-                document.querySelectorAll('.quiz-option').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const selectedIndex = parseInt(btn.dataset.index);
-                        const correctIndex = q.options.findIndex(opt => opt.correct);
-                        
-                        if (selectedIndex === correctIndex) {
-                            quizScore++;
-                            renderQuizQuestion('correct', selectedIndex, correctIndex);
-                        } else {
-                            renderQuizQuestion('incorrect', selectedIndex, correctIndex);
-                        }
-                    });
-                });
-            }
         }
         
-        function showQuizResults() {
-            const modal = document.getElementById('quiz-complete-modal');
-            const scoreDisplay = document.getElementById('quiz-score-display');
-            const scoreMessage = document.getElementById('quiz-score-message');
+        function attachQuizListeners(setId) {
+            let currentSet = null;
+            let questions = []; // Array of { term, definition, options }
+            let currentIndex = 0;
+            let score = 0;
             
-            const percent = Math.round((quizScore / quizQuestions.length) * 100);
-            scoreDisplay.textContent = `${percent}%`;
-            scoreMessage.textContent = `You got ${quizScore} out of ${quizQuestions.length} correct.`;
+            // Get all elements
+            const backBtn = document.getElementById('quiz-back-btn');
+            const loadingEl = document.getElementById('quiz-loading');
+            const errorEl = document.getElementById('quiz-error');
+            const mainEl = document.getElementById('quiz-main');
             
-            modal.classList.remove('hidden');
+            const titleEl = document.getElementById('quiz-title');
+            const progressEl = document.getElementById('quiz-progress');
+            const scoreEl = document.getElementById('quiz-score');
+            const questionEl = document.getElementById('quiz-question');
+            const optionsEl = document.getElementById('quiz-options');
+            const feedbackEl = document.getElementById('quiz-feedback');
+            const feedbackText = document.getElementById('feedback-text');
+            const nextBtn = document.getElementById('next-question-btn');
             
-            if (percent === 100) {
-                // Trigger confetti
-                confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+            const completeModal = document.getElementById('quiz-complete-modal');
+            const finalScoreEl = document.getElementById('quiz-final-score');
+            const finalMsgEl = document.getElementById('quiz-final-message');
+            const restartBtn = document.getElementById('quiz-restart-btn');
+            const completeBackBtn = document.getElementById('quiz-complete-back-btn');
+
+            // --- Helper: Shuffle array
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            // --- Helper: Generate quiz questions
+            function generateQuestions(cards) {
+                const shuffledCards = shuffleArray([...cards]);
+                return shuffledCards.map((card) => {
+                    const { term, definition } = card;
+                    
+                    // Get 3 wrong definitions
+                    const wrongOptions = cards
+                        .filter(c => c.definition !== definition) // Find all different cards
+                        .sort(() => 0.5 - Math.random()) // Shuffle them
+                        .slice(0, 3) // Get the first 3
+                        .map(c => c.definition); // Get their definitions
+                    
+                    const options = shuffleArray([...wrongOptions, definition]);
+                    
+                    return {
+                        term,
+                        definition,
+                        options
+                    };
+                });
+            }
+
+            // --- Helper: Display current question
+            function showQuestion(index) {
+                const q = questions[index];
+                questionEl.textContent = q.term;
+                progressEl.textContent = `Question ${index + 1} / ${questions.length}`;
+                scoreEl.textContent = `Score: ${score}`;
+                optionsEl.innerHTML = '';
+                
+                q.options.forEach((option, i) => {
+                    optionsEl.innerHTML += `
+                        <button
+                            data-option="${option}"
+                            class="option-btn block w-full text-left p-5 bg-white dark:bg-gray-700 rounded-lg shadow-md hover:shadow-lg hover:bg-blue-50 dark:hover:bg-gray-600 transition-all"
+                        >
+                            <span class="text-gray-800 dark:text-gray-200">${option}</span>
+                        </button>
+                    `;
+                });
+                
+                // Add listeners to new option buttons
+                optionsEl.querySelectorAll('.option-btn').forEach(btn => {
+                    btn.addEventListener('click', handleOptionClick);
+                });
+            }
+
+            // --- Helper: Handle user answer
+            function handleOptionClick(e) {
+                const selectedOption = e.currentTarget.dataset.option;
+                const correctAnswer = questions[currentIndex].definition;
+                
+                // Disable all buttons
+                optionsEl.querySelectorAll('.option-btn').forEach(btn => {
+                    btn.disabled = true;
+                    if (btn.dataset.option === correctAnswer) {
+                        btn.classList.add('bg-green-200', 'dark:bg-green-800');
+                    }
+                });
+                
+                if (selectedOption === correctAnswer) {
+                    score++;
+                    feedbackText.textContent = 'Correct!';
+                    feedbackText.className = 'text-xl font-medium text-green-600 dark:text-green-400';
+                } else {
+                    e.currentTarget.classList.add('bg-red-200', 'dark:bg-red-800');
+                    feedbackText.textContent = 'Incorrect!';
+                    feedbackText.className = 'text-xl font-medium text-red-600 dark:text-red-400';
+                }
+                
+                scoreEl.textContent = `Score: ${score}`;
+                feedbackEl.classList.remove('hidden');
+            }
+
+            // --- Helper: Go to next question or finish
+            function nextQuestion() {
+                currentIndex++;
+                if (currentIndex < questions.length) {
+                    feedbackEl.classList.add('hidden');
+                    showQuestion(currentIndex);
+                } else {
+                    // Quiz complete
+                    showResults();
+                }
             }
             
-            document.getElementById('quiz-restart-btn').addEventListener('click', () => {
-                modal.classList.add('hidden');
-                attachQuizListeners(currentSetId); // This re-fetches and re-generates
-            });
-            document.getElementById('quiz-back-btn').addEventListener('click', () => navigate('dashboard'));
+            // --- Helper: Show final results
+            function showResults() {
+                const percentage = Math.round((score / questions.length) * 100);
+                finalScoreEl.textContent = `${percentage}%`;
+                finalMsgEl.textContent = `You got ${score} out of ${questions.length} correct.`;
+                completeModal.classList.remove('hidden');
+                
+                if (percentage === 100) {
+                    confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+                }
+            }
+            
+            // --- Helper: Restart quiz
+            function restartQuiz() {
+                questions = shuffleArray(questions);
+                currentIndex = 0;
+                score = 0;
+                feedbackEl.classList.add('hidden');
+                completeModal.classList.add('hidden');
+                showQuestion(0);
+            }
+
+            // --- Load data ---
+            const fetchSet = async () => {
+                try {
+                  const docRef = doc(db, "studySets", setId);
+                  const docSnap = await getDoc(docRef);
+                  if (docSnap.exists()) {
+                    currentSet = { id: docSnap.id, ...docSnap.data() };
+                    
+                    if (currentSet.cards.length < 4) {
+                        throw new Error("This set must have at least 4 cards to be quizzed.");
+                    }
+                    
+                    questions = generateQuestions(currentSet.cards);
+                    titleEl.textContent = currentSet.title;
+                    mainEl.classList.remove('hidden');
+                    restartQuiz();
+                  } else {
+                    throw new Error("Study set not found.");
+                  }
+                } catch (err) {
+                  console.error("Error fetching set:", err);
+                  errorEl.textContent = "Failed to load quiz: " + err.message;
+                  errorEl.classList.remove('hidden');
+                } finally {
+                  loadingEl.classList.add('hidden');
+                }
+            };
+            fetchSet();
+            
+            // --- Attach Listeners ---
+            backBtn.addEventListener('click', () => navigate('dashboard'));
+            nextBtn.addEventListener('click', nextQuestion);
+            restartBtn.addEventListener('click', restartQuiz);
+            completeBackBtn.addEventListener('click', () => navigate('dashboard'));
         }
         
         // --- LEARN SETUP PAGE ---
         function LearnSetupPageHTML(setId) {
             return `
-                <div class="max-w-2xl mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl">
-                    <button id="learn-setup-back" class="flex items-center text-blue-600 dark:text-blue-500 hover:underline mb-6">
+                <div class="max-w-3xl mx-auto">
+                    <button id="learn-setup-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
                         ${IconBack()}
-                        <span class="ml-1">Back to Set</span>
+                        <span class="ml-1">Back to Dashboard</span>
                     </button>
                     
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Learn Mode Setup</h1>
-                    
-                    <form id="learn-setup-form" class="space-y-8">
-                        <div>
-                            <label class="block text-lg font-medium text-gray-700 dark:text-gray-200">Session Size</label>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">How many cards do you want to study?</p>
-                            <div class="flex flex-col sm:flex-row gap-4">
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="radio" name="sessionSize" value="10" class="sr-only">
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">Small (10 cards)</span>
-                                </label>
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="radio" name="sessionSize" value="20" class="sr-only">
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">Medium (20 cards)</span>
-                                </label>
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="radio" name="sessionSize" value="all" class="sr-only" checked>
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">All Cards</span>
-                                </label>
-                            </div>
+                    <div id="learn-setup-content" class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl">
+                        <!-- Loading State -->
+                        <div id="learn-setup-loading">
+                            <p class="text-gray-700 dark:text-gray-300">Loading settings...</p>
                         </div>
                         
-                        <div>
-                            <label class="block text-lg font-medium text-gray-700 dark:text-gray-200">Question Types</label>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">How do you want to be tested?</p>
-                            <div class="flex flex-col sm:flex-row gap-4">
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="checkbox" name="questionType" value="mc" class="sr-only" checked>
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">Multiple Choice</span>
-                                </label>
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="checkbox" name="questionType" value="typed" class="sr-only">
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">Typed Answer</span>
-                                </label>
-                            </div>
-                            <p id="type-error" class="text-red-600 text-sm mt-2 hidden">Please select at least one question type.</p>
+                        <!-- Error State -->
+                        <div id="learn-setup-error" class="hidden">
+                            <p class="text-red-600"></p>
                         </div>
                         
-                        <div>
-                            <label class="block text-lg font-medium text-gray-700 dark:text-gray-200">Prompt With</label>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">What side of the card do you want to see first?</p>
-                            <div class="flex flex-col sm:flex-row gap-4">
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="radio" name="promptWith" value="term" class="sr-only" checked>
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">Term</span>
-                                </label>
-                                <label class="flex-1 p-4 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer has-[:checked]:bg-blue-50 dark:has-[:checked]:bg-gray-700 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-                                    <input type="radio" name="promptWith" value="definition" class="sr-only">
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">Definition</span>
-                                </label>
-                            </div>
+                        <!-- Main Content -->
+                        <div id="learn-setup-main" class="hidden">
+                            <h1 id="learn-setup-title" class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Learn Setup</h1>
+                            
+                            <form id="learn-setup-form" class="space-y-8">
+                                <!-- Session Size -->
+                                <div>
+                                    <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-3">Session Size</h2>
+                                    <div class="flex flex-col sm:flex-row gap-4">
+                                        <label class="flex-1 p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="radio" name="session-size" value="10" class="mr-2">
+                                            <span class="text-gray-700 dark:text-gray-300">10 Cards</span>
+                                        </label>
+                                        <label class="flex-1 p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="radio" name="session-size" value="20" class="mr-2">
+                                            <span class="text-gray-700 dark:text-gray-300">20 Cards</span>
+                                        </label>
+                                        <label class="flex-1 p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="radio" name="session-size" value="all" class="mr-2" checked>
+                                            <span class="text-gray-700 dark:text-gray-300">All Cards (<span id="learn-card-count">0</span>)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- Question Types -->
+                                <div>
+                                    <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-3">Question Types</h2>
+                                    <div class="space-y-4">
+                                        <label class="flex items-center p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="checkbox" id="q-type-mc" value="mc" class="h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500" checked>
+                                            <span class="ml-3 text-gray-700 dark:text-gray-300">Multiple Choice (Easier)</span>
+                                        </label>
+                                        <label class="flex items-center p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="checkbox" id="q-type-typed" value="typed" class="h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500">
+                                            <span class="ml-3 text-gray-700 dark:text-gray-300">Typed Answer (Harder)</span>
+                                        </label>
+                                    </div>
+                                    <p id="q-type-error" class="text-red-600 text-sm mt-2 hidden">Please select at least one question type.</p>
+                                </div>
+                                
+                                <!-- Prompt Direction -->
+                                <div>
+                                    <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-3">Prompt With...</h2>
+                                    <div class="space-y-4">
+                                        <label class="flex items-center p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="checkbox" id="prompt-term" value="term" class="h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500" checked>
+                                            <span class="ml-3 text-gray-700 dark:text-gray-300">Term (Show "Mitochondria", ask for definition)</span>
+                                        </label>
+                                        <label class="flex items-center p-4 border dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                            <input type="checkbox" id="prompt-def" value="def" class="h-5 w-5 text-blue-600 border-gray-300 dark:border-gray-600 rounded focus:ring-blue-500" checked>
+                                            <span class="ml-3 text-gray-700 dark:text-gray-300">Definition (Show "Powerhouse of the cell", ask for term)</span>
+                                        </label>
+                                    </div>
+                                    <p id="prompt-error" class="text-red-600 text-sm mt-2 hidden">Please select at least one prompt direction.</p>
+                                </div>
+                                
+                                <button type="submit" class="w-full px-6 py-3 text-lg font-medium text-white bg-green-600 rounded-md hover:bg-green-700">
+                                    Start Learning
+                                </button>
+                            </form>
                         </div>
-                        
-                        <button type="submit" class="w-full py-3 px-6 bg-blue-600 text-white font-bold text-lg rounded-lg shadow-md hover:bg-blue-700 transition-colors">
-                            Start Learning
-                        </button>
-                    </form>
+                    </div>
                 </div>
             `;
         }
         
         function attachLearnSetupListeners(setId) {
-            document.getElementById('learn-setup-back').addEventListener('click', () => navigate('edit', setId));
+            let cardCount = 0;
             
-            document.getElementById('learn-setup-form').addEventListener('submit', (e) => {
+            // Get all elements
+            const backBtn = document.getElementById('learn-setup-back-btn');
+            const loadingEl = document.getElementById('learn-setup-loading');
+            const errorEl = document.getElementById('learn-setup-error');
+            const mainEl = document.getElementById('learn-setup-main');
+            
+            const titleEl = document.getElementById('learn-setup-title');
+            const cardCountEl = document.getElementById('learn-card-count');
+            const form = document.getElementById('learn-setup-form');
+            
+            const qTypeMC = document.getElementById('q-type-mc');
+            const qTypeTyped = document.getElementById('q-type-typed');
+            const qTypeError = document.getElementById('q-type-error');
+            
+            const promptTerm = document.getElementById('prompt-term');
+            const promptDef = document.getElementById('prompt-def');
+            const promptError = document.getElementById('prompt-error');
+            
+            // --- Load data ---
+            const fetchSet = async () => {
+                try {
+                  const docRef = doc(db, "studySets", setId);
+                  const docSnap = await getDoc(docRef);
+                  if (docSnap.exists()) {
+                    const set = { id: docSnap.id, ...docSnap.data() };
+                    cardCount = set.cards.length;
+                    titleEl.textContent = `Learn: ${set.title}`;
+                    cardCountEl.textContent = cardCount;
+                    mainEl.classList.remove('hidden');
+                  } else {
+                    throw new Error("Study set not found.");
+                  }
+                } catch (err) {
+                  console.error("Error fetching set:", err);
+                  errorEl.textContent = "Failed to load settings: " + err.message;
+                  errorEl.classList.remove('hidden');
+                } finally {
+                  loadingEl.classList.add('hidden');
+                }
+            };
+            fetchSet();
+            
+            // --- Attach Listeners ---
+            backBtn.addEventListener('click', () => navigate('dashboard'));
+            
+            form.addEventListener('submit', (e) => {
                 e.preventDefault();
                 
-                const formData = new FormData(e.target);
-                const size = formData.get('sessionSize');
-                const types = formData.getAll('questionType');
-                const prompt = formData.get('promptWith');
+                // Validation
+                const qTypes = [qTypeMC.checked, qTypeTyped.checked];
+                const prompts = [promptTerm.checked, promptDef.checked];
                 
-                const typeError = document.getElementById('type-error');
-                if (types.length === 0) {
-                    typeError.classList.remove('hidden');
-                    return;
+                let isValid = true;
+                if (!qTypes.some(v => v)) {
+                    qTypeError.classList.remove('hidden');
+                    isValid = false;
+                } else {
+                    qTypeError.classList.add('hidden');
                 }
-                typeError.classList.add('hidden');
                 
+                if (!prompts.some(v => v)) {
+                    promptError.classList.remove('hidden');
+                    isValid = false;
+                } else {
+                    promptError.classList.add('hidden');
+                }
+                
+                if (!isValid) return;
+                
+                // Save settings
                 learnSettings = {
-                    setId,
-                    size,
-                    types,
-                    prompt
+                    sessionSize: document.querySelector('input[name="session-size"]:checked').value,
+                    qTypeMC: qTypeMC.checked,
+                    qTypeTyped: qTypeTyped.checked,
+                    promptTerm: promptTerm.checked,
+                    promptDef: promptDef.checked,
+                    allCards: cardCount // Store total card count
                 };
                 
-                console.log("Learn Settings:", learnSettings);
-                navigate('learn');
+                // Navigate to learn session
+                navigate('learn', setId);
             });
         }
         
-        // --- LEARN PAGE ---
-        let learnSession = {
-            allCards: [],
-            wrongPile: [],
-            currentCard: null,
-            questionType: null,
-            promptWith: 'term',
-            masteredCount: 0,
-            sessionSize: 0
-        };
-        
+        // --- LEARN SESSION PAGE ---
         function LearnPageHTML(setId) {
             return `
-                <div class="max-w-3xl mx-auto" id="learn-page-container">
-                    <p class="text-gray-700 dark:text-gray-300">Loading learning session...</p>
-                </div>
-                
-                <!-- Learn Completion Modal -->
-                <div id="learn-complete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-                  <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full text-center">
-                    <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Session Complete!</h3>
-                    <p class="mt-4 text-lg text-gray-600 dark:text-gray-400" id="learn-complete-message"></p>
-                    <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-                      <button
-                        type="button"
-                        id="learn-restart-btn"
-                        class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700"
-                      >
-                        Start New Session
-                      </button>
-                      <button
-                        type="button"
-                        id="learn-back-btn"
-                        class="px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600"
-                      >
-                        Back to Dashboard
-                      </button>
+                <div class="max-w-3xl mx-auto">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-4">
+                        <button id="learn-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline">
+                            ${IconBack()}
+                            <span class="ml-1">Back to Setup</span>
+                        </button>
+                        <h1 id="learn-title" class="text-2xl font-bold text-gray-900 dark:text-white">Learn</h1>
                     </div>
-                  </div>
-                </div>
-            `;
-        }
-        
-        async function attachLearnListeners(setId) {
-            const container = document.getElementById('learn-page-container');
-            
-            try {
-                // 1. Fetch the set
-                const docRef = doc(db, "studySets", setId);
-                const docSnap = await getDoc(docRef);
-                
-                if (!docSnap.exists()) {
-                    throw new Error("Study set not found.");
-                }
-                
-                let allCards = docSnap.data().cards;
-                shuffleArray(allCards);
-                
-                // 2. Apply settings
-                if (learnSettings.size !== 'all') {
-                    allCards = allCards.slice(0, parseInt(learnSettings.size));
-                }
-                
-                learnSession.allCards = shuffleArray([...allCards]); // This is the main pile
-                learnSession.wrongPile = [];
-                learnSession.masteredCount = 0;
-                learnSession.sessionSize = learnSession.allCards.length;
-                learnSession.promptWith = learnSettings.prompt;
-                
-                if (learnSession.sessionSize === 0) {
-                    throw new Error("No cards to study in this session.");
-                }
-                
-                // 3. Start the session
-                nextLearnQuestion();
-                
-            } catch (err) {
-                console.error("Error loading learn session:", err);
-                container.innerHTML = `<p class="text-red-600">${err.message}</p>
-                    <button id="back-to-dash" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">Back to Dashboard</button>`;
-                document.getElementById('back-to-dash').addEventListener('click', () => navigate('dashboard'));
-            }
-        }
-        
-        function nextLearnQuestion() {
-            // Are we done?
-            if (learnSession.masteredCount === learnSession.sessionSize) {
-                showLearnResults();
-                return;
-            }
-            
-            // Do we have any "wrong" cards to re-study?
-            if (learnSession.wrongPile.length > 0) {
-                learnSession.currentCard = learnSession.wrongPile.shift();
-            } else {
-                // Get the next card from the main pile
-                learnSession.currentCard = learnSession.allCards.pop();
-            }
-            
-            // What kind of question?
-            const types = learnSettings.types;
-            learnSession.questionType = types[Math.floor(Math.random() * types.length)];
-            
-            // Render the UI
-            renderLearnQuestion();
-        }
-        
-        function renderLearnQuestion(feedback = null, userAnswer = null) {
-            const container = document.getElementById('learn-page-container');
-            const card = learnSession.currentCard;
-            
-            const [question, answer] = learnSession.promptWith === 'term' 
-                ? [card.term, card.definition] 
-                : [card.definition, card.term];
-                
-            const progressPercent = (learnSession.masteredCount / learnSession.sessionSize) * 100;
-
-            let questionHTML = '';
-            if (learnSession.questionType === 'mc') {
-                // Generate MC options
-                const allAnswers = learnSession.allCards.concat(learnSession.wrongPile).map(c => learnSession.promptWith === 'term' ? c.definition : c.term);
-                const tempPool = allAnswers.filter(a => a !== answer);
-                shuffleArray(tempPool);
-                
-                const options = shuffleArray([
-                    { text: answer, correct: true },
-                    { text: tempPool[0], correct: false },
-                    { text: tempPool[1], correct: false },
-                    { text: tempPool[2], correct: false },
-                ]);
-                
-                questionHTML = `
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        ${options.map((option, index) => {
-                            let colorClass = 'bg-white dark:bg-gray-800 hover:shadow-xl hover:ring-2 hover:ring-blue-500';
-                            if (feedback && option.correct) {
-                                colorClass = 'bg-green-100 dark:bg-green-900 ring-2 ring-green-500';
-                            } else if (feedback === 'incorrect' && option.text === userAnswer) {
-                                colorClass = 'bg-red-100 dark:bg-red-900 ring-2 ring-red-500';
-                            }
-                            
-                            return `
-                            <button 
-                                class="learn-option p-6 rounded-lg shadow-lg text-lg font-medium text-gray-800 dark:text-gray-200 text-left transition-all ${colorClass}"
-                                data-answer="${option.text}"
-                                ${feedback ? 'disabled' : ''}
-                            >
-                                ${option.text}
-                            </button>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
-            } else { // Typed Answer
-                questionHTML = `
-                    <form id="learn-typed-form">
-                        <input
-                          type="text"
-                          id="learn-typed-input"
-                          class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-lg"
-                          placeholder="Type your answer..."
-                          ${feedback ? 'disabled' : ''}
-                        />
-                        <button type="submit" class="w-full mt-4 px-6 py-3 bg-blue-600 text-white rounded-md ${feedback ? 'hidden' : ''}">Check</button>
-                    </form>
-                `;
-            }
-            
-            container.innerHTML = `
-                <button id="learn-page-back" class="flex items-center text-blue-600 dark:text-blue-500 hover:underline mb-4">
-                  ${IconBack()}
-                  <span class="ml-1">Quit Session</span>
-                </button>
-                
-                <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Learn Mode</h1>
-                <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">Mastered: ${learnSession.masteredCount} / ${learnSession.sessionSize}</p>
-          
-                <!-- Progress Bar -->
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
-                  <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progressPercent}%"></div>
-                </div>
-                
-                <!-- Question -->
-                <div class="w-full min-h-[10rem] bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6 mb-8">
-                  <p class="text-3xl md:text-4xl font-semibold text-gray-900 dark:text-white text-center">${question}</p>
-                </div>
-                
-                <!-- Answer Area -->
-                <div id="learn-answer-area">
-                    ${questionHTML}
-                </div>
-                
-                <!-- Feedback & Next Button -->
-                <div id="learn-feedback-container" class="mt-6">
-                    ${feedback ? `
-                        <div class="p-6 rounded-lg ${feedback === 'correct' ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}">
-                            <p class="text-2xl font-bold ${feedback === 'correct' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}">
-                                ${feedback === 'correct' ? 'Correct!' : 'Incorrect'}
-                            </p>
-                            ${feedback === 'incorrect' ? `
-                                <p class="text-lg mt-2 text-gray-800 dark:text-gray-200">The correct answer was: <strong>${answer}</strong></p>
-                            ` : ''}
-                            <button id="next-learn-btn" class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-md">Continue</button>
+                    
+                    <!-- Progress Stats -->
+                    <div class="flex justify-around bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-6">
+                        <div class="text-center">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Remaining</div>
+                            <div id="stat-remaining" class="text-2xl font-bold text-blue-600 dark:text-blue-400">0</div>
                         </div>
-                    ` : ''}
+                        <div class="text-center">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Incorrect</div>
+                            <div id="stat-incorrect" class="text-2xl font-bold text-red-600 dark:text-red-400">0</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">Correct</div>
+                            <div id="stat-correct" class="text-2xl font-bold text-green-600 dark:text-green-400">0</div>
+                        </div>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div id="learn-content">
+                        <!-- Loading State -->
+                        <div id="learn-loading">
+                            <p class="text-gray-700 dark:text-gray-300">Building your session...</p>
+                        </div>
+                        
+                        <!-- Error State -->
+                        <div id="learn-error" class="hidden">
+                            <p class="text-red-600"></p>
+                        </div>
+                        
+                        <!-- Question Card -->
+                        <div id="learn-question-card" class="hidden">
+                            <!-- Prompt -->
+                            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 mb-6">
+                                <p class="text-sm text-gray-500 dark:text-gray-400" id="question-prompt-label">DEFINITION</p>
+                                <p id="question-prompt" class="text-2xl md:text-3xl font-semibold text-gray-900 dark:text-white mt-2 min-h-[50px]"></p>
+                            </div>
+                            
+                            <!-- Answer Area (MC) -->
+                            <div id="answer-mc" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- MC options injected here -->
+                            </div>
+                            
+                            <!-- Answer Area (Typed) -->
+                            <form id="answer-typed" class="hidden">
+                                <label for="typed-answer" class="text-sm text-gray-500 dark:text-gray-400" id="answer-prompt-label">TERM</label>
+                                <input
+                                  type="text"
+                                  id="typed-answer"
+                                  autocomplete="off"
+                                  class="w-full px-4 py-3 mt-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-lg"
+                                />
+                                <button type="submit" class="mt-4 w-full px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                    Check Answer
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <!-- Feedback Card -->
+                        <div id="learn-feedback-card" class="hidden">
+                            <div id="feedback-box" class="p-6 rounded-lg shadow-xl">
+                                <h2 id="feedback-title" class="text-2xl font-bold"></h2>
+                                <p id="feedback-correct-answer" class="text-lg mt-2 dark:text-gray-300"></p>
+                            </div>
+                            <button id="feedback-next-btn" class="mt-6 w-full px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                Continue
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Completion Modal -->
+                    <div id="learn-complete-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+                      <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-md w-full text-center">
+                        <div id="confetti-container-learn" class="absolute top-0 left-0 w-full h-full"></div>
+                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Session Complete!</h3>
+                        <p class="mt-4 text-lg text-gray-600 dark:text-gray-400">Great job! You've mastered all the cards in this session.</p>
+                        <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                          <button
+                            type="button"
+                            id="learn-restart-btn"
+                            class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700"
+                          >
+                            Start New Session
+                          </button>
+                          <button
+                            type="button"
+                            id="learn-complete-back-btn"
+                            class="px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            Back to Dashboard
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                 </div>
             `;
+        }
+        
+        function attachLearnListeners(setId) {
+            // State
+            let allCards = [];
+            let sessionQueue = []; // Cards to be asked
+            let incorrectQueue = []; // Cards gotten wrong
+            let correctCount = 0;
+            let currentQuestion = null; // { card, prompt, answer, type }
             
-            // Attach Listeners
-            document.getElementById('learn-page-back').addEventListener('click', () => navigate('dashboard'));
+            // Get all elements
+            const backBtn = document.getElementById('learn-back-btn');
+            const titleEl = document.getElementById('learn-title');
+            const statRemaining = document.getElementById('stat-remaining');
+            const statIncorrect = document.getElementById('stat-incorrect');
+            const statCorrect = document.getElementById('stat-correct');
             
-            if (feedback) {
-                document.getElementById('next-learn-btn').addEventListener('click', nextLearnQuestion);
-            } else {
-                if (learnSession.questionType === 'mc') {
-                    document.querySelectorAll('.learn-option').forEach(btn => {
-                        btn.addEventListener('click', () => {
-                            const selectedAnswer = btn.dataset.answer;
-                            handleLearnAnswer(selectedAnswer);
-                        });
-                    });
-                } else { // Typed
-                    document.getElementById('learn-typed-form').addEventListener('submit', (e) => {
-                        e.preventDefault();
-                        const typedAnswer = document.getElementById('learn-typed-input').value;
-                        handleLearnAnswer(typedAnswer);
-                    });
+            const loadingEl = document.getElementById('learn-loading');
+            const errorEl = document.getElementById('learn-error');
+            
+            const questionCard = document.getElementById('learn-question-card');
+            const promptLabel = document.getElementById('question-prompt-label');
+            const promptText = document.getElementById('question-prompt');
+            
+            const mcArea = document.getElementById('answer-mc');
+            const typedArea = document.getElementById('answer-typed');
+            const typedInput = document.getElementById('typed-answer');
+            const typedLabel = document.getElementById('answer-prompt-label');
+            
+            const feedbackCard = document.getElementById('learn-feedback-card');
+            const feedbackBox = document.getElementById('feedback-box');
+            const feedbackTitle = document.getElementById('feedback-title');
+            const feedbackAnswer = document.getElementById('feedback-correct-answer');
+            const feedbackNextBtn = document.getElementById('feedback-next-btn');
+            
+            const completeModal = document.getElementById('learn-complete-modal');
+            const restartBtn = document.getElementById('learn-restart-btn');
+            const completeBackBtn = document.getElementById('learn-complete-back-btn');
+
+            // --- Helper: Shuffle array
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
                 }
+                return array;
             }
-        }
-        
-        function handleLearnAnswer(userAnswer) {
-            const card = learnSession.currentCard;
-            const correctAnswer = learnSession.promptWith === 'term' ? card.definition : card.term;
             
-            // Simple check, case-insensitive and trim
-            const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
-            
-            if (isCorrect) {
-                learnSession.masteredCount++;
-                // This card is done for the session. Don't add to wrongPile.
-                renderLearnQuestion('correct', userAnswer);
-            } else {
-                // Add to wrong pile to be re-asked
-                learnSession.wrongPile.push(card);
-                renderLearnQuestion('incorrect', userAnswer);
+            // --- Helper: Update stats UI
+            function updateStats() {
+                statRemaining.textContent = sessionQueue.length;
+                statIncorrect.textContent = incorrectQueue.length;
+                statCorrect.textContent = correctCount;
             }
-        }
-        
-        function showLearnResults() {
-            const modal = document.getElementById('learn-complete-modal');
-            const scoreMessage = document.getElementById('learn-complete-message');
+
+            // --- Helper: Build the initial session queue
+            function buildSession(cards) {
+                let sessionCards = shuffleArray([...cards]);
+                if (learnSettings.sessionSize !== 'all') {
+                    sessionCards = sessionCards.slice(0, parseInt(learnSettings.sessionSize));
+                }
+                
+                // Create questions based on prompt settings
+                sessionQueue = [];
+                sessionCards.forEach(card => {
+                    if (learnSettings.promptTerm) sessionQueue.push({ card, prompt: 'term', answer: 'def' });
+                    if (learnSettings.promptDef) sessionQueue.push({ card, prompt: 'def', answer: 'term' });
+                });
+                
+                sessionQueue = shuffleArray(sessionQueue);
+                incorrectQueue = [];
+                correctCount = 0;
+            }
             
-            scoreMessage.textContent = `Great job! You've mastered all ${learnSession.sessionSize} cards in this session.`;
-            modal.classList.remove('hidden');
+            // --- Helper: Get the next question
+            function nextQuestion() {
+                if (sessionQueue.length === 0 && incorrectQueue.length === 0) {
+                    // Session Complete!
+                    completeModal.classList.remove('hidden');
+                    confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+                    return;
+                }
+                
+                // Prioritize incorrect cards, but mix them up
+                if (incorrectQueue.length > 0 && (sessionQueue.length === 0 || Math.random() < 0.5)) {
+                    currentQuestion = incorrectQueue.shift();
+                } else {
+                    currentQuestion = sessionQueue.shift();
+                }
+                
+                // Decide question type (MC or Typed)
+                const availableTypes = [];
+                if (learnSettings.qTypeMC) availableTypes.push('mc');
+                if (learnSettings.qTypeTyped) availableTypes.push('typed');
+                
+                currentQuestion.type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+                
+                displayQuestion();
+            }
+
+            // --- Helper: Display the current question
+            function displayQuestion() {
+                updateStats();
+                
+                // Set prompt
+                if (currentQuestion.prompt === 'term') {
+                    promptLabel.textContent = "TERM";
+                    promptText.textContent = currentQuestion.card.term;
+                } else {
+                    promptLabel.textContent = "DEFINITION";
+                    promptText.textContent = currentQuestion.card.definition;
+                }
+                
+                // Show correct answer area
+                if (currentQuestion.type === 'mc') {
+                    // --- Build Multiple Choice ---
+                    mcArea.classList.remove('hidden');
+                    typedArea.classList.add('hidden');
+                    mcArea.innerHTML = '';
+                    
+                    const correctAnswer = currentQuestion.card[currentQuestion.answer === 'term' ? 'term' : 'definition'];
+                    
+                    // Get 3 wrong options
+                    const wrongOptions = allCards
+                        .filter(c => c[currentQuestion.answer === 'term' ? 'term' : 'definition'] !== correctAnswer)
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 3)
+                        .map(c => c[currentQuestion.answer === 'term' ? 'term' : 'definition']);
+                    
+                    const options = shuffleArray([...wrongOptions, correctAnswer]);
+                    
+                    options.forEach(option => {
+                        mcArea.innerHTML += `
+                            <button
+                                data-option="${option.replace(/"/g, '&quot;')}"
+                                class="mc-option-btn block w-full text-left p-5 bg-white dark:bg-gray-700 rounded-lg shadow-md hover:shadow-lg hover:bg-blue-50 dark:hover:bg-gray-600 transition-all"
+                            >
+                                <span class="text-gray-800 dark:text-gray-200">${option}</span>
+                            </button>
+                        `;
+                    });
+                    
+                    mcArea.querySelectorAll('.mc-option-btn').forEach(btn => {
+                        btn.addEventListener('click', (e) => checkAnswer(e.currentTarget.dataset.option));
+                    });
+
+                } else {
+                    // --- Build Typed Answer ---
+                    mcArea.classList.add('hidden');
+                    typedArea.classList.remove('hidden');
+                    typedInput.value = '';
+                    typedLabel.textContent = currentQuestion.answer === 'term' ? 'TERM' : 'DEFINITION';
+                    typedInput.focus();
+                }
+                
+                // Show question, hide feedback
+                questionCard.classList.remove('hidden');
+                feedbackCard.classList.add('hidden');
+            }
             
-            // Trigger confetti
-            confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+            // --- Helper: Check the user's answer
+            function checkAnswer(userAnswer) {
+                const correctAnswer = currentQuestion.card[currentQuestion.answer === 'term' ? 'term' : 'definition'];
+                
+                // Simple check (case-insensitive)
+                const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+                
+                if (isCorrect) {
+                    correctCount++;
+                    feedbackTitle.textContent = "Correct!";
+                    feedbackBox.className = "p-6 rounded-lg shadow-xl bg-green-100 dark:bg-green-900";
+                    feedbackTitle.className = "text-2xl font-bold text-green-800 dark:text-green-300";
+                    feedbackAnswer.textContent = correctAnswer;
+                } else {
+                    incorrectQueue.push(currentQuestion); // Add back to incorrect queue
+                    feedbackTitle.textContent = "Incorrect";
+                    feedbackBox.className = "p-6 rounded-lg shadow-xl bg-red-100 dark:bg-red-900";
+                    feedbackTitle.className = "text-2xl font-bold text-red-800 dark:text-red-300";
+                    feedbackAnswer.innerHTML = `
+                        <span class="text-sm block text-gray-700 dark:text-gray-400">Your answer:</span>
+                        <span class="text-gray-900 dark:text-gray-200">${userAnswer}</span>
+                        <br>
+                        <span class="text-sm block text-gray-700 dark:text-gray-400 mt-2">Correct answer:</span>
+                        <span class="text-gray-900 dark:text-gray-200">${correctAnswer}</span>
+                    `;
+                }
+                
+                // Show feedback
+                questionCard.classList.add('hidden');
+                feedbackCard.classList.remove('hidden');
+                updateStats();
+            }
+
+            // --- Load data ---
+            const fetchSet = async () => {
+                try {
+                  const docRef = doc(db, "studySets", setId);
+                  const docSnap = await getDoc(docRef);
+                  if (docSnap.exists()) {
+                    allCards = docSnap.data().cards;
+                    if (allCards.length === 0) throw new Error("This set has no cards.");
+                    titleEl.textContent = `Learn: ${docSnap.data().title}`;
+                    
+                    // Start session
+                    buildSession(allCards);
+                    nextQuestion();
+                    
+                    loadingEl.classList.add('hidden');
+                  } else {
+                    throw new Error("Study set not found.");
+                  }
+                } catch (err) {
+                  console.error("Error fetching set:", err);
+                  errorEl.textContent = "Failed to load learn session: " + err.message;
+                  errorEl.classList.remove('hidden');
+                  loadingEl.classList.add('hidden');
+                }
+            };
+            fetchSet();
             
-            document.getElementById('learn-restart-btn').addEventListener('click', () => {
-                modal.classList.add('hidden');
-                navigate('learnSetup', currentSetId); // Go back to setup
+            // --- Attach Listeners ---
+            backBtn.addEventListener('click', () => navigate('learnSetup', setId));
+            
+            typedArea.addEventListener('submit', (e) => {
+                e.preventDefault();
+                checkAnswer(typedInput.value);
             });
-            document.getElementById('learn-back-btn').addEventListener('click', () => navigate('dashboard'));
+            
+            feedbackNextBtn.addEventListener('click', nextQuestion);
+            
+            restartBtn.addEventListener('click', () => {
+                completeModal.classList.add('hidden');
+                buildSession(allCards);
+                nextQuestion();
+            });
+            completeBackBtn.addEventListener('click', () => navigate('dashboard'));
+        }
+        
+        // --- UPLOAD PAGE (Client-side AI) ---
+        function UploadPageHTML() {
+            return `
+                <div class="max-w-3xl mx-auto">
+                    <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+                        ${IconAI()}
+                        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mt-4 mb-4">Import & Auto-Create</h1>
+                        <p class="text-lg text-gray-600 dark:text-gray-400 mb-8">
+                          Upload a \`.txt\` or \`.pdf\` file and our AI will
+                          automatically create flashcards for you.
+                        </p>
+                
+                        <div class="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                          <label 
+                            for="file-upload" 
+                            class="cursor-pointer inline-flex items-center px-6 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
+                          >
+                            <span id="file-upload-icon">${IconUpload()}</span>
+                            <span class="ml-2" id="file-upload-text">Select a file</span>
+                          </label>
+                          <input id="file-upload" name="file-upload" type="file" class="sr-only" accept=".pdf,.txt" />
+                          
+                          <p id="file-name" class="mt-4 text-sm text-gray-600 dark:text-gray-400 hidden"></p>
+                        </div>
+                        
+                        <button
+                          id="upload-btn"
+                          disabled
+                          class="w-full mt-8 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                        >
+                          Generate Flashcards
+                        </button>
+                        
+                        <p id="upload-message" class="mt-4 text-sm"></p>
+                        
+                        <div class="mt-8 p-4 bg-blue-50 dark:bg-gray-700 border border-blue-200 dark:border-blue-900 rounded-lg text-left">
+                          <h4 class="font-semibold text-blue-800 dark:text-blue-300">How this works:</h4>
+                          <p class="text-sm text-blue-700 dark:text-blue-400 mt-2">
+                            1. Your browser reads the file (it's never uploaded to a server).
+                          </p>
+                          <p class="text-sm text-blue-700 dark:text-blue-400 mt-2">
+                            2. The text is sent to the Google Gemini AI.
+                          </p>
+                           <p class="text-sm text-blue-700 dark:text-blue-400 mt-2">
+                            3. The AI generates your flashcards and they are saved to your account!
+                          </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachUploadListeners() {
+            const fileInput = document.getElementById('file-upload');
+            const fileNameEl = document.getElementById('file-name');
+            const uploadBtn = document.getElementById('upload-btn');
+            const messageEl = document.getElementById('upload-message');
+            const uploadText = document.getElementById('file-upload-text');
+            const uploadIcon = document.getElementById('file-upload-icon');
+            
+            let selectedFile = null;
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files[0]) {
+                  selectedFile = e.target.files[0];
+                  fileNameEl.textContent = `Selected: ${selectedFile.name}`;
+                  fileNameEl.classList.remove('hidden');
+                  uploadBtn.disabled = false;
+                  uploadText.textContent = 'Change file';
+                }
+            });
+
+            uploadBtn.addEventListener('click', async () => {
+                if (!selectedFile) return;
+
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Processing...';
+                uploadIcon.innerHTML = `<div class="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>`;
+                messageEl.textContent = 'Reading your file...';
+                messageEl.className = 'mt-4 text-sm text-blue-600 dark:text-blue-400';
+
+                try {
+                    let fileText = '';
+                    
+                    // 1. Read the file
+                    if (selectedFile.type === 'application/pdf') {
+                        messageEl.textContent = 'Reading PDF... (this might take a moment)';
+                        const fileReader = new FileReader();
+                        fileReader.onload = async (event) => {
+                            const typedArray = new Uint8Array(event.target.result);
+                            try {
+                                const pdf = await pdfjsLib.getDocument(typedArray).promise;
+                                let text = '';
+                                for (let i = 1; i <= pdf.numPages; i++) {
+                                    const page = await pdf.getPage(i);
+                                    const textContent = await page.getTextContent();
+                                    text += textContent.items.map(item => item.str).join(' ') + '\n';
+                                }
+                                fileText = text;
+                                await generateCards(fileText);
+                            } catch (pdfErr) {
+                                throw new Error("Could not read this PDF file. It might be corrupted or image-based.");
+                            }
+                        };
+                        fileReader.readAsArrayBuffer(selectedFile);
+                    } else {
+                        // Plain text
+                        fileText = await selectedFile.text();
+                        await generateCards(fileText);
+                    }
+
+                } catch (err) {
+                    console.error("Error during upload/AI process:", err);
+                    messageEl.textContent = `Error: ${err.message}`;
+                    messageEl.className = 'mt-4 text-sm text-red-600 dark:text-red-400';
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = 'Generate Flashcards';
+                    uploadIcon.innerHTML = IconUpload();
+                }
+            });
+            
+            async function generateCards(text) {
+                if (text.trim().length < 50) {
+                    throw new Error("The document is too short. It must have at least 50 characters of text.");
+                }
+                
+                messageEl.textContent = 'Contacting AI...';
+                
+                // 2. Call Gemini AI
+                const prompt = `
+                    You are an expert study assistant.
+                    Analyze the following text and extract the most important key terms and their definitions.
+                    The text is from a file named "${selectedFile.name}".
+                    Return your answer as a valid JSON array of objects, where each object has a "term" and "definition" key.
+                    
+                    Example: [{"term": "Mitochondria", "definition": "The powerhouse of the cell."}]
+                    
+                    If you cannot find any good terms, return an empty array [].
+                    Do not return more than 50 cards.
+                    
+                    Text to analyze:
+                    ---
+                    ${text.substring(0, 40000)}
+                    ---
+                `;
+                
+                // NOTE: This uses the client-side key. NOT SECURE for production.
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      contents: [{ parts: [{ text: prompt }] }],
+                      generationConfig: {
+                        responseMimeType: "application/json",
+                      }
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    console.error("Gemini API Error:", errorBody);
+                    throw new Error(errorBody.error?.message || "Failed to call AI. Check your API key and billing.");
+                }
+
+                const result = await response.json();
+                const jsonText = result.candidates[0].content.parts[0].text;
+                
+                let cards;
+                try {
+                    // The AI response might be wrapped in ```json ... ```
+                    const cleanJson = jsonText.replace(/^```json|```$/g, "").trim();
+                    cards = JSON.parse(cleanJson);
+                } catch (e) {
+                    console.error("Failed to parse JSON from AI:", jsonText);
+                    throw new Error("The AI returned an invalid response. Please try again.");
+                }
+
+                if (!cards || cards.length === 0) {
+                    throw new Error("The AI couldn't find any flashcards in that document.");
+                }
+
+                messageEl.textContent = 'Saving your new set...';
+
+                // 3. Save to Firestore
+                const newSet = {
+                  title: `AI Set: ${selectedFile.name.replace(/\.[^/.]+$/, "")}`,
+                  description: `Generated from file: ${selectedFile.name}`,
+                  ownerId: globalUser.uid,
+                  ownerEmail: globalUser.email,
+                  isPublic: false, // Default to private
+                  cards: cards,
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                };
+                
+                const docRef = await addDoc(collection(db, "studySets"), newSet);
+                
+                messageEl.textContent = `Success! Created a new set with ${cards.length} cards.`;
+                messageEl.className = 'mt-4 text-sm text-green-600 dark:text-green-400';
+                
+                // Reset form
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Generate Flashcards';
+                uploadIcon.innerHTML = IconUpload();
+                fileInput.value = null;
+                selectedFile = null;
+                fileNameEl.classList.add('hidden');
+                
+                // Navigate to new set
+                setTimeout(() => {
+                    navigate('edit', docRef.id);
+                }, 2000);
+            }
         }
 
-        // --- AUTH STATE LISTENER ---
-        // This is the entry point of the app
+        // --- AUTHENTICATION LISTENER (The App's "Start" button) ---
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 globalUser = user;
@@ -2400,4 +2691,3 @@
     </script>
 </body>
 </html>
-
