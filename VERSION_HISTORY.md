@@ -1,5 +1,10 @@
 # CogniDeck - Version History
 
+## [v4.1.0] - AI Hint 
+*Date: 11/06/2025*
+
+This update includes the new way to help with studying. AI HINTS. When in study mode just click AI Hint and let our AI help you
+
 ## [v4.0.0] - Advanced "Learn Mode"
 *Date: 11/04/2025*
 
