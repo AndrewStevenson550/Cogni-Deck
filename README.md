@@ -11,7 +11,7 @@
 
 **CogniDeck** is a free, AI-powered flashcard application inspired by Quizlet. It's built as a **single-file HTML/JavaScript application** that connects to a free backend on Firebase.
 
-The app allows users to create, share, and study flashcard sets. Its standout feature is an AI import tool: a user can upload a `.txt` file, and the app will **call the Google Gemini AI directly from the browser** to create a complete, ready-to-study flashcard set.
+The app allows users to create, share, and study flashcard sets. Its standout feature is an AI import tool: a user can upload a `.txt` or a `.pdf` file, and the app will **call the Google Gemini AI directly from the browser** to create a complete, ready-to-study flashcard set.
 
 ## Features
 
