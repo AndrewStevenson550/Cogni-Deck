@@ -1,30 +1,111 @@
 <!DOCTYPE html>
-<html lang="en" class="">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CogniDeck - AI Powered Flashcards</title>
-    
+    <title>CogniDeck - AI Study Sets</title>
+    <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- pdf.js (for client-side PDF reading) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
     <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js`;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
     </script>
     
+    <!-- Confetti (for celebrations) -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     
-    <link rel="stylesheet" href="style.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <script src="script.js" type="module"></script>
+    <!-- Tailwind Config & Dark Mode Setup -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class', // Enable class-based dark mode
+            theme: {
+                extend: {
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    // Custom styles for 3D card flip
+                    transitionProperty: {
+                        'transform': 'transform',
+                    },
+                    transformStyle: {
+                        'preserve-3d': 'preserve-3d',
+                    },
+                    backfaceVisibility: {
+                        'hidden': 'hidden',
+                    },
+                    rotate: {
+                        'y-180': 'rotateY(180deg)',
+                    },
+                },
+            },
+            plugins: [
+                function({ addUtilities }) {
+                    addUtilities({
+                        '.[transform-style\\:preserve-3d]': {
+                            'transform-style': 'preserve-3d',
+                        },
+                        '.[backface-visibility\\:hidden]': {
+                            'backface-visibility': 'hidden',
+                        },
+                        '.[transform\\:rotateY\\(180deg\\)]': {
+                            'transform': 'rotateY(180deg)',
+                        },
+                        '.line-clamp-2': {
+                            'overflow': 'hidden',
+                            'display': '-webkit-box',
+                            '-webkit-box-orient': 'vertical',
+                            '-webkit-line-clamp': '2',
+                        },
+                    });
+                }
+            ],
+        };
+        
+        // --- DARK MODE LOGIC ---
+        // On page load or when changing themes, best to add inline in `head` to avoid FOUC
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+    </script>
     
+    <!-- Custom Styles for 3D card flip -->
+    <style>
+        /* This is necessary for the card flip */
+        .card-flipper {
+            perspective: 1000px;
+        }
+        .card-inner {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .card-flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden; /* Safari */
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+    </style>
+    
+    <!-- === GOOGLE ADSENSE SCRIPT === -->
+    <!-- This is the main script from your AdSense account -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2643963093121190"
+     crossorigin="anonymous"></script>
 </head>
 <body class="font-inter bg-gray-100 dark:bg-gray-900">
+    <!-- Main App Container -->
     <div id="app">
+        <!-- This is where the app will be rendered by JavaScript -->
         <div class="flex items-center justify-center h-screen">
             <div class="flex flex-col items-center">
                 <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -32,5 +113,2423 @@
             </div>
         </div>
     </div>
+
+    <!-- Firebase SDK Scripts -->
+    <script type="module">
+        // --- FIREBASE IMPORTS ---
+        import { initializeApp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+          getAuth,
+          signInWithEmailAndPassword,
+          createUserWithEmailAndPassword,
+          signOut,
+          onAuthStateChanged
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+          getFirestore,
+          collection,
+          addDoc,
+          doc,
+          getDoc,
+          getDocs,
+          updateDoc,
+          deleteDoc,
+          query,
+          where,
+          onSnapshot,
+          serverTimestamp
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // We are NOT using functions, so we don't import it.
+
+
+        // --- IMPORTANT: PASTE YOUR FIREBASE CONFIG HERE ---
+        // This is the config you provided earlier.
+        const firebaseConfig = {
+          apiKey: "AIzaSyDaTxyHz5dr4aWCE4tAiql4jJ4ImrrJKQM",
+          authDomain: "quizlet-type-app.firebaseapp.com",
+          projectId: "quizlet-type-app",
+          storageBucket: "quizlet-type-app.firebasestorage.app",
+          messagingSenderId: "829739254487",
+          appId: "1:829739254487:web:457ffc620af28c96f8a692"
+        };
+        
+        // --- IMPORTANT: PASTE YOUR GEMINI API KEY HERE ---
+        // This is the key you provided from Google AI Studio
+        // WARNING: This is NOT secure for a public website!
+        const GEMINI_API_KEY = "AIzaSyDxNcI0uaa1C6z6mc09lINO7rLcNe2xyig";
+
+
+        // --- FIREBASE & APP INITIALIZATION ---
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        setLogLevel('Debug'); // Use 'Debug' for detailed logs
+
+        // --- GLOBAL APP STATE ---
+        let globalUser = null;
+        let globalAuthLoaded = false;
+        let currentPage = 'auth';
+        let currentSetId = null;
+        let learnSettings = {}; // Store settings for learn mode
+        let dashboardUnsubscribe = null; // To store the dashboard listener
+        let searchUnsubscribe = null; // To store the search listener
+
+        const appContainer = document.getElementById('app');
+
+        // --- NAVIGATION ---
+        function navigate(page, setId = null) {
+            // Unsubscribe from live listeners when leaving a page
+            if (currentPage === 'dashboard' && page !== 'dashboard' && dashboardUnsubscribe) {
+                console.log("Unsubscribing from dashboard");
+                dashboardUnsubscribe();
+                dashboardUnsubscribe = null;
+            }
+            if (currentPage === 'search' && page !== 'search' && searchUnsubscribe) {
+                console.log("Unsubscribing from search");
+                searchUnsubscribe();
+                searchUnsubscribe = null;
+            }
+
+            currentPage = page;
+            currentSetId = setId;
+            render();
+        }
+
+        // --- RENDER FUNCTION ---
+        // This is the main function that builds the UI
+        function render() {
+            if (!globalAuthLoaded) {
+                appContainer.innerHTML = FullScreenLoader();
+                return;
+            }
+
+            let pageHTML = '';
+            
+            // Show navbar on all pages except auth
+            if (globalUser && currentPage !== 'auth') {
+                pageHTML += NavbarHTML();
+            }
+            
+            // Add main content with sidebars
+            pageHTML += `<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">`;
+            pageHTML += `<div class="flex justify-center space-x-8">`;
+            
+            // Left Ad Sidebar (hidden on mobile)
+            pageHTML += `
+                <aside class="hidden lg:block w-48 flex-shrink-0">
+                    <div class="sticky top-24 w-48 h-96 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400">
+                        <!-- *** GOOGLE AD SENSE (Step 2) *** -->
+                        <!-- Delete this div and paste your Ad Unit code here -->
+                        <div class="text-center p-4">
+                            <p class="font-semibold">Ad Placeholder</p>
+                            <p class="text-sm">(160x600)</p>
+                        </div>
+                    </div>
+                </aside>
+            `;
+            
+            // Main Page Content
+            pageHTML += `<div class="flex-grow min-w-0" style="max-width: 1024px;">`; // Main content container
+            
+            switch (currentPage) {
+                case 'auth':
+                    pageHTML = AuthPageHTML(); // Auth page is full screen, so replace all HTML
+                    break;
+                case 'dashboard':
+                    pageHTML += DashboardPageHTML();
+                    break;
+                case 'search':
+                    pageHTML += SearchPageHTML();
+                    break;
+                case 'upload':
+                    pageHTML += UploadPageHTML();
+                    break;
+                case 'create':
+                    pageHTML += SetEditorHTML();
+                    break;
+                case 'edit':
+                    pageHTML += SetEditorHTML(currentSetId);
+                    break;
+                case 'study':
+                    pageHTML += StudyPageHTML(currentSetId);
+                    break;
+                case 'quiz':
+                    pageHTML += QuizPageHTML(currentSetId);
+                    break;
+                case 'learnSetup':
+                    pageHTML += LearnSetupPageHTML(currentSetId);
+                    break;
+                case 'learn':
+                    pageHTML += LearnPageHTML(currentSetId);
+                    break;
+                case 'about':
+                    pageHTML += AboutPageHTML();
+                    break;
+                default:
+                    pageHTML += DashboardPageHTML();
+            }
+            
+            pageHTML += `</div>`; // End Main content container
+            
+            // Right Ad Sidebar (hidden on mobile)
+            pageHTML += `
+                <aside class="hidden lg:block w-48 flex-shrink-0">
+                    <div class="sticky top-24 w-48 h-96 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center text-gray-500 dark:text-gray-400">
+                        <!-- *** GOOGLE AD SENSE (Step 2) *** -->
+                        <!-- Delete this div and paste your Ad Unit code here -->
+                        <div class="text-center p-4">
+                            <p class="font-semibold">Ad Placeholder</p>
+                            <p class="text-sm">(160x600)</p>
+                        </div>
+                    </div>
+                </aside>
+            `;
+            
+            pageHTML += `</div>`; // End flex container
+            pageHTML += `</div>`; // End max-w-7xl
+
+            // Handle auth page (which has no navbar or sidebars)
+            if (currentPage === 'auth') {
+                appContainer.innerHTML = pageHTML;
+            } else {
+                // Add modal HTML outside the main layout for global access
+                appContainer.innerHTML = pageHTML + AIHintModalHTML();
+            }
+
+            // Attach event listeners after HTML is rendered
+            attachAllListeners();
+        }
+
+        // --- EVENT LISTENER ATTACHMENT ---
+        // This function finds all elements by ID and attaches their JS listeners
+        function attachAllListeners() {
+            // Dark Mode Toggle
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            if (themeToggleBtn) {
+                themeToggleBtn.addEventListener('click', toggleDarkMode);
+            }
+            const mobileThemeToggleBtn = document.getElementById('mobile-theme-toggle');
+            if (mobileThemeToggleBtn) {
+                mobileThemeToggleBtn.addEventListener('click', toggleDarkMode);
+            }
+            
+            // Mobile Menu
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            if (mobileMenuBtn) {
+                mobileMenuBtn.addEventListener('click', toggleMobileMenu);
+            }
+
+            // Page-specific listeners
+            switch (currentPage) {
+                case 'auth':
+                    attachAuthListeners();
+                    break;
+                case 'dashboard':
+                    attachDashboardListeners();
+                    break;
+                case 'search':
+                    attachSearchListeners();
+                    break;
+                case 'upload':
+                    attachUploadListeners();
+                    break;
+                case 'create':
+                    attachSetEditorListeners();
+                    break;
+                case 'edit':
+                    attachSetEditorListeners(currentSetId);
+                    break;
+                case 'study':
+                    attachStudyListeners(currentSetId);
+                    break;
+                case 'quiz':
+                    attachQuizListeners(currentSetId);
+                    break;
+                case 'learnSetup':
+                    attachLearnSetupListeners(currentSetId);
+                    break;
+                case 'learn':
+                    attachLearnListeners(currentSetId);
+                    break;
+                // No listeners needed for About or Navbar
+            }
+            
+            // Navbar listeners (need to be attached even if page is e.g. 'dashboard')
+            if (globalUser) {
+                attachNavbarListeners();
+            }
+        }
+
+        // --- DARK MODE LOGIC ---
+        function toggleDarkMode() {
+            // Check if dark mode is currently enabled
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.theme = 'light';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.theme = 'dark';
+            }
+            // Re-render to update icons (sun/moon)
+            // This is a soft-render, just to update icons, not the whole page
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const mobileThemeToggleBtn = document.getElementById('mobile-theme-toggle');
+            if (themeToggleBtn) {
+                themeToggleBtn.innerHTML = document.documentElement.classList.contains('dark') ? IconSun() : IconMoon();
+            }
+            if (mobileThemeToggleBtn) {
+                mobileThemeToggleBtn.innerHTML = document.documentElement.classList.contains('dark') ? IconSun() : IconMoon();
+            }
+        }
+
+        // --- ICONS (as functions returning strings) ---
+        const IconHome = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" /></svg>`;
+        const IconSearch = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>`;
+        const IconUpload = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>`;
+        const IconPlus = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>`;
+        const IconLogout = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" /></svg>`;
+        const IconTrash = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.502 0c.342.052.682.107 1.022.166m11.48 0c.342.052.682.107 1.022.166M4.772 5.79L4.772 5.79m14.456 0l-2.81-2.98m-11.48 0l2.81 2.98m0 0l-2.81 2.98m11.48 0l2.81 2.98" /></svg>`;
+        const IconEdit = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>`;
+        const IconBack = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>`;
+        const IconFlip = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0 0v-4.992m0 0h-4.992" /></svg>`;
+        const IconNext = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>`;
+        const IconPrev = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>`;
+        const IconPublic = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c.24 0 .477-.007.71-.021M12 21c-.24 0-.477-.007-.71-.021M12 15a3.75 3.75 0 003.75-3.75V8.25A3.75 3.75 0 0012 4.5v.001M12 15a3.75 3.75 0 01-3.75-3.75V8.25A3.75 3.75 0 0112 4.5v.001M12 15v.001M12 4.5v.001m0 0v.001m0 0h.001M12 15h.001M12 4.5h.001M12 3c-1.928 0-3.69.784-4.95 2.05S4.5 8.072 4.5 10v.75a8.217 8.217 0 004.22 7.029c.465.253.96.442 1.48.59M12 3c1.928 0 3.69.784 4.95 2.05S19.5 8.072 19.5 10v.75a8.217 8.217 0 01-4.22 7.029c-.465.253-.96.442-1.48.59M12 3v.001" /></svg>`;
+        const IconPrivate = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>`;
+        const IconCheck = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>`;
+        const IconAI = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 21.75l-.648-1.188a2.25 2.25 0 00-1.579-1.579L12.75 18.25l1.188-.648a2.25 2.25 0 001.579-1.579L16.25 15l.648 1.188a2.25 2.25 0 001.579 1.579L19.75 18.25l-1.188.648a2.25 2.25 0 00-1.579 1.579z" /></svg>`;
+        const IconBook = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18c-2.305 0-4.408.867-6 2.292m0-14.25v14.25" /></svg>`;
+        const IconQuiz = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25c.621 0 1.125.504 1.125 1.125v3.375c0 .621-.504 1.125-1.125 1.125h-4.5c-.621 0-1.125-.504-1.125-1.125v-3.375c0-.621.504-1.125 1.125-1.125h4.5zM14.25 8.625l3 3m0 0l3-3m-3 3v-6m-9 5.25h.008v.008H5.25v-.008zM5.25 15h.008v.008H5.25v-.008zM5.25 18h.008v.008H5.25v-.008zM8.25 15h.008v.008H8.25v-.008zM8.25 18h.008v.008H8.25v-.008zM11.25 15h.008v.008H11.25v-.008zM11.25 18h.008v.008H11.25v-.008z" /></svg>`;
+        const IconLearn = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0 0 21 18V6a2.25 2.25 0 0 0-2.25-2.25H5.25A2.25 2.25 0 0 0 3 6v12a2.25 2.25 0 0 0 2.25 2.25z" /></svg>`;
+        const IconSun = () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path d="M12 2.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0V3a.75.75 0 0 1 .75-.75ZM7.5 12a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM18.899 6.101a.75.75 0 0 0-1.06-1.06l-1.591 1.59a.75.75 0 1 0 1.06 1.061l1.591-1.59ZM21.75 12a.75.75 0 0 1-.75.75h-2.25a.75.75 0 0 1 0-1.5h2.25a.75.75 0 0 1 .75.75ZM17.839 17.839a.75.75 0 0 0 1.06-1.06l-1.59-1.591a.75.75 0 1 0-1.061 1.06l1.59 1.591ZM12 18.75a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-1.5 0v-2.25a.75.75 0 0 1 .75-.75ZM5.101 17.839a.75.75 0 0 0 1.061 1.06l1.59-1.591a.75.75 0 0 0-1.06-1.06l-1.591 1.59ZM6.101 5.101a.75.75 0 0 0-1.06 1.06l1.59 1.591a.75.75 0 0 0 1.06-1.06l-1.59-1.591ZM3 12a.75.75 0 0 1 .75-.75h2.25a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 12Z" /></svg>`;
+        const IconMoon = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z" /></svg>`;
+        const IconInfo = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>`;
+        const IconMenu = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>`;
+        const IconClose = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>`;
+        const IconSparkles = () => `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.898 20.562 16.25 21.75l-.648-1.188a2.25 2.25 0 0 0-1.579-1.579L12.75 18.25l1.188-.648a2.25 2.25 0 0 0 1.579-1.579L16.25 15l.648 1.188a2.25 2.25 0 0 0 1.579 1.579L19.75 18.25l-1.188.648a2.25 2.25 0 0 0-1.579 1.579Z" /></svg>`;
+
+
+        // --- UI COMPONENTS (as functions returning HTML strings) ---
+
+        // --- FullScreenLoader ---
+        function FullScreenLoader() {
+            return `
+                <div class="flex items-center justify-center h-screen bg-gray-100 dark:bg-gray-900">
+                    <div class="flex flex-col items-center">
+                        <div class="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p class="mt-4 text-lg font-semibold text-gray-700 dark:text-gray-200">Loading CogniDeck...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // --- AI Hint Modal ---
+        function AIHintModalHTML() {
+            return `
+                <div id="ai-hint-modal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 hidden">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full m-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+                                ${IconSparkles().replace('w-6 h-6', 'w-5 h-5 mr-2')}
+                                AI Generated Hint
+                            </h3>
+                            <button id="close-hint-modal" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                ${IconClose()}
+                            </button>
+                        </div>
+                        <div id="ai-hint-content" class="text-gray-700 dark:text-gray-300">
+                            <!-- Content will be injected here -->
+                            <div class="flex items-center justify-center h-24">
+                                <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                <p class="ml-3 dark:text-gray-200">Generating hint...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Navbar ---
+        function NavbarHTML() {
+            return `
+                <nav class="fixed top-0 left-0 right-0 bg-white dark:bg-gray-800 shadow-md z-50">
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                        <div class="flex items-center justify-between h-16">
+                            
+                            <!-- Logo -->
+                            <div class="flex-shrink-0 flex items-center cursor-pointer" id="nav-logo">
+                                <span class="text-2xl font-bold text-blue-600 dark:text-blue-500">CogniDeck</span>
+                            </div>
+
+                            <!-- Desktop Nav -->
+                            <div class="hidden md:flex md:items-center md:space-x-4">
+                                <button id="nav-home" class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium ${currentPage === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                    ${IconHome()} <span>Home</span>
+                                </button>
+                                <button id="nav-search" class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium ${currentPage === 'search' ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                    ${IconSearch()} <span>Search</span>
+                                </button>
+                                <button id="nav-upload" class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium ${currentPage === 'upload' ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                    ${IconUpload()} <span>Import</span>
+                                </button>
+                                <button id="nav-about" class="flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium ${currentPage === 'about' ? 'bg-blue-600 text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                    ${IconInfo()} <span>About</span>
+                                </button>
+                                <button id="nav-create" class="ml-4 flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                    ${IconPlus()} <span class="ml-2">Create Set</span>
+                                </button>
+                            </div>
+
+                            <!-- User Menu (Desktop) -->
+                            <div class="hidden md:flex items-center space-x-3">
+                                 <button id="theme-toggle" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle dark mode">
+                                    ${document.documentElement.classList.contains('dark') ? IconSun() : IconMoon()}
+                                 </button>
+                                 <span class="text-sm text-gray-600 dark:text-gray-300 hidden lg:block">${globalUser.email}</span>
+                                 <button id="nav-signout" class="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Sign Out">
+                                    ${IconLogout()}
+                                 </button>
+                            </div>
+                            
+                            <!-- Mobile Menu Button -->
+                            <div class="md:hidden flex items-center">
+                                <button id="mobile-menu-btn" class="inline-flex items-center justify-center p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700">
+                                    <span class="sr-only">Open main menu</span>
+                                    ${IconMenu()}
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Mobile Menu -->
+                    <div class="hidden md:hidden" id="mobile-menu">
+                        <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                            <button id="mobile-nav-home" class="flex items-center w-full px-4 py-3 text-base font-medium rounded-md ${currentPage === 'dashboard' ? 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                ${IconHome()} <span class="ml-3">Home</span>
+                            </button>
+                            <button id="mobile-nav-search" class="flex items-center w-full px-4 py-3 text-base font-medium rounded-md ${currentPage === 'search' ? 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                ${IconSearch()} <span class="ml-3">Search</span>
+                            </button>
+                            <button id="mobile-nav-upload" class="flex items-center w-full px-4 py-3 text-base font-medium rounded-md ${currentPage === 'upload' ? 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                ${IconUpload()} <span class="ml-3">Import</span>
+                            </button>
+                            <button id="mobile-nav-about" class="flex items-center w-full px-4 py-3 text-base font-medium rounded-md ${currentPage === 'about' ? 'bg-blue-100 dark:bg-gray-700 text-blue-700 dark:text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}">
+                                ${IconInfo()} <span class="ml-3">About</span>
+                            </button>
+                            <button id="mobile-nav-create" class="flex items-center w-full px-4 py-3 text-base font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                ${IconPlus()} <span class="ml-3">Create Set</span>
+                            </button>
+                        </div>
+                        <div class="pt-4 pb-3 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center px-5">
+                                <div class="flex-shrink-0">
+                                    <!-- Add user avatar here if you have one -->
+                                </div>
+                                <div class="ml-3">
+                                    <div class="text-base font-medium text-gray-800 dark:text-white">${globalUser.email}</div>
+                                </div>
+                                <button id="mobile-theme-toggle" class="ml-auto flex-shrink-0 p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" title="Toggle dark mode">
+                                    ${document.documentElement.classList.contains('dark') ? IconSun() : IconMoon()}
+                                 </button>
+                            </div>
+                            <div class="mt-3 px-2 space-y-1">
+                                <button id="mobile-nav-signout" class="flex items-center w-full px-4 py-3 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                                    ${IconLogout()} <span class="ml-3">Sign out</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+            `;
+        }
+
+        function attachNavbarListeners() {
+            // Desktop
+            document.getElementById('nav-logo').addEventListener('click', () => navigate('dashboard'));
+            document.getElementById('nav-home').addEventListener('click', () => navigate('dashboard'));
+            document.getElementById('nav-search').addEventListener('click', () => navigate('search'));
+            document.getElementById('nav-upload').addEventListener('click', () => navigate('upload'));
+            document.getElementById('nav-about').addEventListener('click', () => navigate('about'));
+            document.getElementById('nav-create').addEventListener('click', () => navigate('create'));
+            document.getElementById('nav-signout').addEventListener('click', handleSignOut);
+            
+            // Mobile
+            document.getElementById('mobile-nav-home').addEventListener('click', () => { toggleMobileMenu(); navigate('dashboard'); });
+            document.getElementById('mobile-nav-search').addEventListener('click', () => { toggleMobileMenu(); navigate('search'); });
+            document.getElementById('mobile-nav-upload').addEventListener('click', () => { toggleMobileMenu(); navigate('upload'); });
+            document.getElementById('mobile-nav-about').addEventListener('click', () => { toggleMobileMenu(); navigate('about'); });
+            document.getElementById('mobile-nav-create').addEventListener('click', () => { toggleMobileMenu(); navigate('create'); });
+            document.getElementById('mobile-nav-signout').addEventListener('click', () => { toggleMobileMenu(); handleSignOut(); });
+        }
+        
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            const btn = document.getElementById('mobile-menu-btn');
+            const isOpen = !menu.classList.contains('hidden');
+            if (isOpen) {
+                menu.classList.add('hidden');
+                btn.innerHTML = IconMenu();
+            } else {
+                menu.classList.remove('hidden');
+                btn.innerHTML = IconClose();
+            }
+        }
+
+        // --- Auth Page ---
+        function AuthPageHTML() {
+            return `
+                <div class="flex items-center justify-center min-h-screen -mt-16 bg-gray-100 dark:bg-gray-900">
+                    <div class="w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl m-4">
+                        <h2 class="text-3xl font-bold text-center text-gray-900 dark:text-white">
+                            Welcome to <span class="text-blue-600 dark:text-blue-500">CogniDeck</span>
+                        </h2>
+                        
+                        <form id="auth-form" class="space-y-6">
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Email address</label>
+                                <input id="email" name="email" type="email" autocomplete="email" required
+                                    class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                                <input id="password" name="password" type="password" autocomplete="current-password" required
+                                    class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+
+                            <div id="auth-error" class="text-sm text-red-600 dark:text-red-400"></div>
+
+                            <button id="auth-submit-btn" type="submit"
+                                class="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                                Log In
+                            </button>
+                        </form>
+
+                        <p class="text-sm text-center text-gray-600 dark:text-gray-400">
+                            <span id="auth-prompt-text">Don't have an account?</span>
+                            <button id="auth-toggle-btn" class="ml-1 font-medium text-blue-600 dark:text-blue-500 hover:text-blue-500 dark:hover:text-blue-400">
+                                Sign Up
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function attachAuthListeners() {
+            const authForm = document.getElementById('auth-form');
+            const authToggleBtn = document.getElementById('auth-toggle-btn');
+            const authError = document.getElementById('auth-error');
+            const authSubmitBtn = document.getElementById('auth-submit-btn');
+            const authPromptText = document.getElementById('auth-prompt-text');
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            
+            let isLogin = true;
+
+            authToggleBtn.addEventListener('click', () => {
+                isLogin = !isLogin;
+                authError.textContent = '';
+                if (isLogin) {
+                    authSubmitBtn.textContent = 'Log In';
+                    authPromptText.textContent = "Don't have an account?";
+                    authToggleBtn.textContent = 'Sign Up';
+                } else {
+                    authSubmitBtn.textContent = 'Sign Up';
+                    authPromptText.textContent = 'Already have an account?';
+                    authToggleBtn.textContent = 'Log In';
+                }
+            });
+
+            authForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                authSubmitBtn.disabled = true;
+                authSubmitBtn.textContent = isLogin ? 'Logging in...' : 'Signing up...';
+                authError.textContent = '';
+
+                const email = emailInput.value;
+                const password = passwordInput.value;
+
+                try {
+                    if (isLogin) {
+                        await signInWithEmailAndPassword(auth, email, password);
+                    } else {
+                        await createUserWithEmailAndPassword(auth, email, password);
+                    }
+                    // Auth listener in App.js will handle success
+                } catch (err) {
+                    console.error("Auth error:", err);
+                    // --- FIX for Auth Error ---
+                    // Make error message more user-friendly
+                    if (err.code === 'auth/invalid-credential') {
+                        authError.textContent = "Wrong email or password. Please try again.";
+                    } else if (err.code === 'auth/email-already-in-use') {
+                        authError.textContent = "An account with this email already exists.";
+                    } else if (err.code === 'auth/weak-password') {
+                        authError.textContent = "Password is too weak. Please use at least 6 characters.";
+                    } else {
+                        authError.textContent = err.message;
+                    }
+                } finally {
+                    authSubmitBtn.disabled = false;
+                    authSubmitBtn.textContent = isLogin ? 'Log In' : 'Sign Up';
+                }
+            });
+        }
+        
+        // --- SignOut ---
+        async function handleSignOut() {
+            try {
+                if (dashboardUnsubscribe) dashboardUnsubscribe();
+                if (searchUnsubscribe) searchUnsubscribe();
+                await signOut(auth);
+                // Auth listener will handle page change
+            } catch (error) {
+                console.error("Error signing out:", error);
+                alert("Error signing out: " + error.message);
+            }
+        }
+
+        // --- Dashboard Page ---
+        function DashboardPageHTML() {
+            return `
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Your Study Sets</h1>
+                <div id="dashboard-content">
+                    <div class="text-center p-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+                        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-4 text-gray-600 dark:text-gray-300">Loading your sets...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachDashboardListeners() {
+            if (!globalUser) return;
+            
+            const dashboardContent = document.getElementById('dashboard-content');
+            
+            const setsCollection = collection(db, "studySets");
+            const q = query(setsCollection, where("ownerId", "==", globalUser.uid));
+
+            dashboardUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                if (querySnapshot.empty) {
+                    dashboardContent.innerHTML = `
+                        <div class="text-center p-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+                            <h3 class="text-xl font-medium text-gray-800 dark:text-white">No sets yet!</h3>
+                            <p class="text-gray-600 dark:text-gray-300 mt-2 mb-4">Create a set manually or import a document to get started.</p>
+                            <button id="dash-create-btn" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                                ${IconPlus()} <span class="ml-2">Create New Set</span>
+                            </button>
+                        </div>
+                    `;
+                    document.getElementById('dash-create-btn').addEventListener('click', () => navigate('create'));
+                } else {
+                    let setsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
+                    querySnapshot.forEach((doc) => {
+                        setsHTML += SetCardHTML(doc.id, doc.data());
+                    });
+                    setsHTML += '</div>';
+                    dashboardContent.innerHTML = setsHTML;
+                    
+                    // Attach listeners for each card
+                    querySnapshot.forEach((doc) => {
+                        const id = doc.id;
+                        const set = doc.data();
+                        const cardCount = set.cards ? set.cards.length : 0;
+                        
+                        document.getElementById(`card-${id}`).addEventListener('click', () => navigate('edit', id));
+                        document.getElementById(`edit-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('edit', id); });
+                        
+                        if (cardCount > 0) {
+                            document.getElementById(`study-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('study', id); });
+                            document.getElementById(`learn-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('learnSetup', id); });
+                        }
+                        if (cardCount >= 4) {
+                            document.getElementById(`quiz-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('quiz', id); });
+                        }
+                    });
+                }
+            }, (err) => {
+                console.error("Error fetching sets:", err);
+                dashboardContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Failed to load your study sets. Please try again later.</p>`;
+            });
+        }
+        
+        // --- SetCard ---
+        function SetCardHTML(id, set) {
+            const cardCount = set.cards ? set.cards.length : 0;
+            const isOwner = set.ownerId === globalUser?.uid;
+            
+            // Logic for disabling buttons
+            const canStudy = cardCount > 0;
+            const canLearn = cardCount > 0; // Changed from 4 to 1
+            const canQuiz = cardCount >= 4;
+            
+            return `
+              <div
+                id="card-${id}"
+                class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col justify-between h-full ${isOwner ? 'cursor-pointer' : 'cursor-default'}"
+              >
+                <div class="p-6">
+                  <div class="flex justify-between items-start">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">${set.title}</h3>
+                     ${set.isPublic ? `
+                        <div class="flex-shrink-0 flex items-center text-xs text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900 px-2 py-1 rounded-full">
+                          ${IconPublic()} <span class="ml-1">Public</span>
+                        </div>
+                      ` : (isOwner ? `
+                        <div class="flex-shrink-0 flex items-center text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900 px-2 py-1 rounded-full">
+                          ${IconPrivate()} <span class="ml-1">Private</span>
+                        </div>
+                      ` : '')}
+                  </div>
+                  <p class="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">${set.description || "No description."}</p>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    ${cardCount} ${cardCount === 1 ? 'card' : 'cards'}
+                  </p>
+                  ${!isOwner && set.ownerEmail ? `
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Created by: ${set.ownerEmail}
+                    </p>
+                  ` : ''}
+                </div>
+                
+                <div class="bg-gray-50 dark:bg-gray-700/50 p-4 flex flex-wrap justify-end gap-2">
+                  ${isOwner ? `
+                    <button
+                      id="edit-btn-${id}"
+                      class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      ${IconEdit()} <span class="ml-2">Edit</span>
+                    </button>
+                  ` : ''}
+                  <button
+                    id="learn-btn-${id}"
+                    ${!canLearn ? 'disabled' : ''}
+                    class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ${IconLearn()} <span class="ml-2">Learn</span>
+                  </button>
+                  <button
+                    id="quiz-btn-${id}"
+                    ${!canQuiz ? 'disabled' : ''}
+                    class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ${IconQuiz()} <span class="ml-2">Quiz</span>
+                  </button>
+                  <button
+                    id="study-btn-${id}"
+                    ${!canStudy ? 'disabled' : ''}
+                    class="inline-flex items-center px-3 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    ${IconBook()} <span class="ml-2">Study</span>
+                  </button>
+                </div>
+              </div>
+            `;
+        }
+
+
+        // --- Search Page ---
+        function SearchPageHTML() {
+             return `
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Search Public Sets</h1>
+                <div class="mb-6">
+                    <input
+                      id="search-input"
+                      type="text"
+                      class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Search by title or description..."
+                    />
+                </div>
+                <div id="search-content">
+                    <div class="text-center p-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+                        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-4 text-gray-600 dark:text-gray-300">Loading public sets...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachSearchListeners() {
+            const searchContent = document.getElementById('search-content');
+            const searchInput = document.getElementById('search-input');
+            let allPublicSets = [];
+            
+            const renderResults = (sets) => {
+                 if (sets.length === 0) {
+                    searchContent.innerHTML = `<p class="text-gray-600 dark:text-gray-300 text-center py-8">No sets found matching your search.</p>`;
+                } else {
+                    let setsHTML = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
+                    sets.forEach(set => {
+                        setsHTML += SetCardHTML(set.id, set);
+                    });
+                    setsHTML += '</div>';
+                    searchContent.innerHTML = setsHTML;
+                    
+                    // Attach listeners
+                    sets.forEach(set => {
+                        const id = set.id;
+                        const cardCount = set.cards ? set.cards.length : 0;
+                        
+                        document.getElementById(`card-${id}`).addEventListener('click', () => navigate('study', id));
+                        
+                        if (cardCount > 0) {
+                            document.getElementById(`study-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('study', id); });
+                            document.getElementById(`learn-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('learnSetup', id); });
+                        }
+                        if (cardCount >= 4) {
+                            document.getElementById(`quiz-btn-${id}`).addEventListener('click', (e) => { e.stopPropagation(); navigate('quiz', id); });
+                        }
+                    });
+                }
+            };
+            
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                const filteredSets = allPublicSets.filter(set => 
+                    set.title.toLowerCase().includes(searchTerm) ||
+                    set.description.toLowerCase().includes(searchTerm)
+                );
+                renderResults(filteredSets);
+            });
+
+            const setsCollection = collection(db, "studySets");
+            const q = query(setsCollection, where("isPublic", "==", true));
+
+            searchUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                allPublicSets = [];
+                querySnapshot.forEach((doc) => {
+                    allPublicSets.push({ id: doc.id, ...doc.data() });
+                });
+                renderResults(allPublicSets);
+                // Trigger search filter if there's already text
+                searchInput.dispatchEvent(new Event('input'));
+                
+            }, (err) => {
+                console.error("Error fetching public sets:", err);
+                searchContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Failed to load public sets.</p>`;
+            });
+        }
+        
+        // --- About Page ---
+        function AboutPageHTML() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-2xl mx-auto">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 text-center">About CogniDeck</h1>
+                    
+                    <div class="space-y-6 text-gray-700 dark:text-gray-300">
+                        <p>
+                            <strong>CogniDeck</strong> is a free, AI-powered flashcard application built to make studying smarter, faster, and more accessible for everyone. It's built as a single, lightweight HTML file that connects to a powerful and free backend on Firebase.
+                        </p>
+                        
+                        <div class="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-3">Core Features</h2>
+                            <ul class="list-disc list-inside space-y-2">
+                                <li><strong>Create & Manage Sets:</strong> Easily create, edit, and delete your own study sets.</li>
+                                <li><strong>Multiple Study Modes:</strong> Study with classic 3D Flashcards, a multiple-choice Quiz, or the smart "Learn" mode.</li>
+                                <li><strong>AI Import:</strong> Upload a \`.txt\` or \`.pdf\` file and let Google's Gemini AI create your flashcards for you.</li>
+                                <li><strong>AI Hints:</strong> Get smart hints from an AI tutor while you study.</li>
+                                <li><strong>Search:</strong> Find and study public sets created by other users.</li>
+                                <li><strong>Dark Mode:</strong> A beautiful, easy-on-the-eyes dark mode that remembers your choice.</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">About the Creator</h2>
+                            <p>
+                                This app was built by <strong>Andrew Stevenson</strong>.
+                            </p>
+                            <p class="mt-2">
+                                The goal was to create a fast, free, and genuinely useful study tool that rivals popular paid apps, all while running on a simple, serverless architecture.
+                            </p>
+                        </div>
+
+                    </div>
+                </div>
+            `;
+        }
+        
+        // --- Study Page ---
+        function StudyPageHTML(setId) {
+            // This is just a shell. The data will be loaded in attachStudyListeners
+            return `
+                <button id="study-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
+                    ${IconBack()} <span class="ml-1">Back to Dashboard</span>
+                </button>
+                <div id="study-page-content">
+                    <div class="text-center p-12">
+                        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-4 text-gray-600 dark:text-gray-300">Loading study set...</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function attachStudyListeners(setId) {
+            const pageContent = document.getElementById('study-page-content');
+            const backBtn = document.getElementById('study-back-btn');
+            backBtn.addEventListener('click', () => navigate('dashboard'));
+
+            let data, currentIndex, knownCards, dontKnowCards, isFlipped, cardQueue;
+            
+            const launchConfetti = () => {
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            };
+
+            const renderCard = () => {
+                if (cardQueue.length === 0) {
+                    // --- Set Complete ---
+                    pageContent.innerHTML = `
+                        <div class="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+                            <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Set Complete!</h3>
+                            <p class="mt-4 text-lg text-gray-600 dark:text-gray-300">
+                                You've reviewed all ${data.cards.length} cards.
+                            </p>
+                            <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                                <button id="study-restart-btn" class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700">
+                                    Study Again
+                                </button>
+                                <button id="study-back-btn-2" class="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    Back to Dashboard
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    launchConfetti();
+                    document.getElementById('study-restart-btn').addEventListener('click', restart);
+                    document.getElementById('study-back-btn-2').addEventListener('click', () => navigate('dashboard'));
+                    return;
+                }
+                
+                currentIndex = cardQueue[0];
+                const currentCard = data.cards[currentIndex];
+                const progressPercent = (knownCards.size / data.cards.length) * 100;
+                
+                pageContent.innerHTML = `
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2 truncate" title="${data.title}">${data.title}</h1>
+                    <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">${knownCards.size + dontKnowCards.size + 1} / ${data.cards.length}</p>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
+                        <div class="bg-green-600 h-2.5 rounded-full" style="width: ${progressPercent}%"></div>
+                    </div>
+                    
+                    <!-- Flashcard -->
+                    <div id="flashcard-flipper" class="w-full h-96 card-flipper mb-6 cursor-pointer">
+                        <div class="card-inner relative w-full h-full">
+                            <!-- Front of Card (Term) -->
+                            <div class="card-front absolute w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6">
+                                <p class="text-3xl md:text-4xl font-semibold text-gray-900 dark:text-white text-center">${currentCard.term}</p>
+                            </div>
+                            <!-- Back of Card (Definition) -->
+                            <div class="card-back absolute w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6">
+                                <p class="text-2xl md:text-3xl font-medium text-gray-800 dark:text-gray-200 text-center">${currentCard.definition}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center text-gray-500 dark:text-gray-400 text-sm mb-6">Click card to flip</div>
+
+                    <!-- Navigation Controls -->
+                    <div class="flex items-center justify-between mb-6">
+                        <button id="prev-card-btn" class="p-4 rounded-full bg-white dark:bg-gray-700 shadow-md hover:bg-gray-100 dark:hover:bg-gray-600" title="Previous Card">
+                            ${IconPrev()}
+                        </button>
+                        
+                        <div class="flex items-center space-x-3">
+                            <button
+                              id="ai-hint-btn"
+                              class="flex items-center px-4 py-3 rounded-lg bg-white dark:bg-gray-700 shadow-md font-medium text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600"
+                              title="Get AI Hint"
+                            >
+                              ${IconSparkles()}
+                              <span class="ml-2 hidden sm:block">AI Hint</span>
+                            </button>
+                        
+                            <button
+                              id="flip-card-btn"
+                              class="flex items-center px-6 py-3 rounded-lg bg-white dark:bg-gray-700 shadow-md font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
+                              title="Flip Card"
+                            >
+                              ${IconFlip()}
+                              <span class="ml-2">Flip</span>
+                            </button>
+                        </div>
+                        
+                        <button id="next-card-btn" class="p-4 rounded-full bg-white dark:bg-gray-700 shadow-md hover:bg-gray-100 dark:hover:bg-gray-600" title="Next Card">
+                            ${IconNext()}
+                        </button>
+                    </div>
+                    
+                    <!-- Known/Unknown Buttons -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <button id="dont-know-btn" class="w-full py-4 rounded-lg font-bold text-lg transition-colors bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-800">
+                            I Don't Know
+                        </button>
+                        <button id="know-btn" class="w-full py-4 rounded-lg font-bold text-lg transition-colors bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800">
+                            I Know This
+                        </button>
+                    </div>
+                `;
+                
+                // --- Attach listeners for the newly rendered card ---
+                const flipCardBtn = document.getElementById('flip-card-btn');
+                const prevCardBtn = document.getElementById('prev-card-btn');
+                const nextCardBtn = document.getElementById('next-card-btn');
+                const knowBtn = document.getElementById('know-btn');
+                const dontKnowBtn = document.getElementById('dont-know-btn');
+                const flashcardFlipper = document.getElementById('flashcard-flipper');
+                const aiHintBtn = document.getElementById('ai-hint-btn');
+                const aiHintModal = document.getElementById('ai-hint-modal');
+                const closeHintModalBtn = document.getElementById('close-hint-modal');
+                
+                isFlipped = false;
+                
+                const flip = (e) => {
+                    e.stopPropagation();
+                    isFlipped = !isFlipped;
+                    if (isFlipped) {
+                        flashcardFlipper.classList.add('card-flipped');
+                    } else {
+                        flashcardFlipper.classList.remove('card-flipped');
+                    }
+                };
+
+                flashcardFlipper.addEventListener('click', flip);
+                flipCardBtn.addEventListener('click', flip);
+                
+                nextCardBtn.addEventListener('click', () => {
+                    // Mark as known and advance
+                    knownCards.add(currentIndex);
+                    cardQueue.shift(); // Remove from queue
+                    renderCard();
+                });
+
+                prevCardBtn.addEventListener('click', () => {
+                    // This logic is tricky in a queue. Let's make it simple:
+                    // Go back to the last "known" or "unknown" card.
+                    if (knownCards.size + dontKnowCards.size > 0) {
+                        // This is a simplification: just re-add current and go to start of queue
+                        // A true "prev" would require a history stack.
+                        // For now, let's just restart the queue if they go "prev" on the first card.
+                        if (knownCards.size + dontKnowCards.size === 0) {
+                           // do nothing
+                        } else {
+                            // a simple "restart"
+                            restart();
+                        }
+                    }
+                });
+                
+                knowBtn.addEventListener('click', () => {
+                    knownCards.add(currentIndex);
+                    cardQueue.shift(); // Remove from queue
+                    renderCard();
+                });
+                
+                dontKnowBtn.addEventListener('click', () => {
+                    dontKnowCards.add(currentIndex);
+                    cardQueue.shift(); // Remove from front
+                    cardQueue.push(currentIndex); // Add to back
+                    renderCard();
+                });
+                
+                // AI Hint Listeners
+                if (aiHintBtn && aiHintModal && closeHintModalBtn) {
+                    aiHintBtn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Don't flip card
+                        const currentCard = data.cards[currentIndex];
+                        aiHintModal.classList.remove('hidden');
+                        // Call the new AI function
+                        getAIHint(currentCard.term, currentCard.definition);
+                    });
+
+                    closeHintModalBtn.addEventListener('click', () => {
+                        aiHintModal.classList.add('hidden');
+                    });
+                    
+                    // Close modal if clicking on the background
+                    aiHintModal.addEventListener('click', (e) => {
+                        if (e.target === aiHintModal) {
+                            aiHintModal.classList.add('hidden');
+                        }
+                    });
+                }
+            };
+            
+            const restart = () => {
+                knownCards = new Set();
+                dontKnowCards = new Set();
+                // Create a queue of indices: [0, 1, 2, ..., n-1]
+                cardQueue = Array.from(Array(data.cards.length).keys());
+                // Shuffle the queue
+                for (let i = cardQueue.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [cardQueue[i], cardQueue[j]] = [cardQueue[j], cardQueue[i]];
+                }
+                renderCard();
+            };
+
+            // --- Load Set Data ---
+            const loadSet = async () => {
+                try {
+                    const docRef = doc(db, "studySets", setId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        data = docSnap.data();
+                        if (!data.cards || data.cards.length === 0) {
+                            pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">This set has no cards to study.</p>`;
+                            return;
+                        }
+                        restart(); // This will load the first card
+                    } else {
+                        pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Study set not found.</p>`;
+                    }
+                } catch (err) {
+                    console.error("Error fetching set:", err);
+                    pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Failed to load study set.</p>`;
+                }
+            };
+            
+            loadSet();
+        }
+
+        // --- Set Editor ---
+        function SetEditorHTML(setId = null) {
+            const isEditing = setId !== null;
+            return `
+                <button id="editor-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
+                    ${IconBack()} <span class="ml-1">Back to Dashboard</span>
+                </button>
+                <form id="set-editor-form" class="bg-white dark:bg-gray-800 p-6 md:p-8 rounded-lg shadow-xl">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">${isEditing ? 'Edit Study Set' : 'Create New Study Set'}</h1>
+                    
+                    <div id="editor-loading-placeholder" class="hidden">
+                        <div class="text-center p-12">
+                            <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                            <p class="mt-4 text-gray-600 dark:text-gray-300">Loading set editor...</p>
+                        </div>
+                    </div>
+                    
+                    <div id="editor-content" class="space-y-6">
+                        <!-- Title -->
+                        <div>
+                            <label for="title" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+                            <input type="text" id="title" required
+                                class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="e.g. Biology - Chapter 1">
+                        </div>
+                        <!-- Description -->
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+                            <textarea id="description" rows="3"
+                                class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="A quick summary of what this set covers"></textarea>
+                        </div>
+                        
+                        <!-- Privacy Toggle -->
+                        <div class="flex items-center justify-between">
+                            <span class="flex-grow flex flex-col">
+                                <span class="text-sm font-medium text-gray-900 dark:text-white">Visibility</span>
+                                <span id="visibility-text" class="text-sm text-gray-500 dark:text-gray-400">Only visible to you.</span>
+                            </span>
+                            <button type="button" id="visibility-toggle" class="bg-gray-200 dark:bg-gray-700 relative inline-flex items-center h-6 rounded-full w-11 transition-colors">
+                                <span class="sr-only">Toggle Visibility</span>
+                                <span id="visibility-knob" class="translate-x-1 inline-block w-4 h-4 transform bg-white rounded-full transition-transform"></span>
+                            </button>
+                        </div>
+
+                        <!-- Cards Section -->
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
+                            <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Flashcards</h2>
+                            <div id="cards-container" class="space-y-4">
+                                <!-- Cards will be injected here -->
+                            </div>
+                            <button type="button" id="add-card-btn"
+                                class="mt-4 inline-flex items-center px-4 py-2 border border-dashed border-gray-400 dark:border-gray-500 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                ${IconPlus()} <span class="ml-2">Add Card</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="editor-error" class="text-red-600 dark:text-red-400 mt-4"></div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="flex items-center justify-between mt-8 border-t border-gray-200 dark:border-gray-700 pt-6">
+                        <div>
+                            ${isEditing ? `
+                                <button type="button" id="delete-set-btn" class="text-sm font-medium text-red-600 hover:text-red-800 dark:hover:text-red-400">
+                                    Delete Set
+                                </button>
+                            ` : '<div></div>'}
+                        </div>
+                        <button type="submit" id="save-set-btn"
+                            class="px-6 py-2 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                            ${isEditing ? 'Update Set' : 'Create Set'}
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Delete Confirmation Modal -->
+                <div id="delete-confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-sm w-full m-4">
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-white">Delete Study Set?</h3>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Are you sure? This action cannot be undone.</p>
+                        <div class="mt-6 flex justify-end space-x-3">
+                            <button type="button" id="cancel-delete-btn" class="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                Cancel
+                            </button>
+                            <button type="button" id="confirm-delete-btn" class="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachSetEditorListeners(setId = null) {
+            const isEditing = setId !== null;
+            let cards = [{ term: '', definition: '' }];
+            let isPublic = false;
+
+            // --- Get DOM Elements ---
+            const form = document.getElementById('set-editor-form');
+            const backBtn = document.getElementById('editor-back-btn');
+            const titleEl = document.getElementById('title');
+            const descriptionEl = document.getElementById('description');
+            const visibilityToggle = document.getElementById('visibility-toggle');
+            const visibilityKnob = document.getElementById('visibility-knob');
+            const visibilityText = document.getElementById('visibility-text');
+            const cardsContainer = document.getElementById('cards-container');
+            const addCardBtn = document.getElementById('add-card-btn');
+            const saveBtn = document.getElementById('save-set-btn');
+            const errorEl = document.getElementById('editor-error');
+            const loadingEl = document.getElementById('editor-loading-placeholder');
+            const contentEl = document.getElementById('editor-content');
+            
+            backBtn.addEventListener('click', () => navigate('dashboard'));
+
+            // --- Render Cards ---
+            const renderCards = () => {
+                cardsContainer.innerHTML = '';
+                cards.forEach((card, index) => {
+                    const cardEl = document.createElement('div');
+                    cardEl.className = 'grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border border-gray-200 dark:border-gray-700 rounded-lg';
+                    cardEl.innerHTML = `
+                        <div>
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Term</label>
+                            <input type="text" value="${card.term}" data-index="${index}" data-field="term"
+                                class="card-input w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Term">
+                        </div>
+                        <div class="flex">
+                            <div class="flex-grow">
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Definition</label>
+                                <input type="text" value="${card.definition}" data-index="${index}" data-field="definition"
+                                    class="card-input w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Definition">
+                            </div>
+                            <button type="button" data-index="${index}"
+                                class="remove-card-btn ml-2 mt-6 p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full h-10 w-10 flex items-center justify-center"
+                                title="Delete card">
+                                ${IconTrash()}
+                            </button>
+                        </div>
+                    `;
+                    cardsContainer.appendChild(cardEl);
+                });
+            };
+
+            // --- Event Handlers ---
+            const handleCardChange = (e) => {
+                const { index, field } = e.target.dataset;
+                cards[index][field] = e.target.value;
+            };
+            
+            const handleRemoveCard = (e) => {
+                if (cards.length <= 1) {
+                    errorEl.textContent = "You must have at least one card.";
+                    return;
+                }
+                const btn = e.target.closest('.remove-card-btn');
+                const { index } = btn.dataset;
+                cards.splice(index, 1);
+                renderCards();
+            };
+
+            const handleAddCard = () => {
+                cards.push({ term: '', definition: '' });
+                renderCards();
+            };
+            
+            const toggleVisibility = () => {
+                isPublic = !isPublic;
+                if (isPublic) {
+                    visibilityToggle.classList.remove('bg-gray-200', 'dark:bg-gray-700');
+                    visibilityToggle.classList.add('bg-blue-600', 'dark:bg-blue-500');
+                    visibilityKnob.classList.remove('translate-x-1');
+                    visibilityKnob.classList.add('translate-x-6');
+                    visibilityText.textContent = "Visible to everyone.";
+                } else {
+                    visibilityToggle.classList.add('bg-gray-200', 'dark:bg-gray-700');
+                    visibilityToggle.classList.remove('bg-blue-600', 'dark:bg-blue-500');
+                    visibilityKnob.classList.add('translate-x-1');
+                    visibilityKnob.classList.remove('translate-x-6');
+                    visibilityText.textContent = "Only visible to you.";
+                }
+            };
+            
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+                errorEl.textContent = '';
+
+                const finalCards = cards.filter(card => card.term.trim() !== '' || card.definition.trim() !== '');
+
+                if (finalCards.length === 0) {
+                    errorEl.textContent = "You must have at least one valid card.";
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = isEditing ? 'Update Set' : 'Create Set';
+                    return;
+                }
+
+                const setData = {
+                    title: titleEl.value.trim(),
+                    description: descriptionEl.value.trim(),
+                    isPublic,
+                    ownerId: globalUser.uid,
+                    ownerEmail: globalUser.email,
+                    cards: finalCards,
+                    updatedAt: serverTimestamp(),
+                };
+
+                try {
+                    if (isEditing) {
+                        const docRef = doc(db, "studySets", setId);
+                        await updateDoc(docRef, setData);
+                    } else {
+                        setData.createdAt = serverTimestamp();
+                        await addDoc(collection(db, "studySets"), setData);
+                    }
+                    navigate('dashboard');
+                } catch (err) {
+                    console.error("Error saving set:", err);
+                    errorEl.textContent = "Failed to save set: " + err.message;
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = isEditing ? 'Update Set' : 'Create Set';
+                }
+            };
+            
+            // --- Attach Listeners ---
+            form.addEventListener('submit', handleSubmit);
+            addCardBtn.addEventListener('click', handleAddCard);
+            visibilityToggle.addEventListener('click', toggleVisibility);
+            
+            cardsContainer.addEventListener('input', (e) => {
+                if (e.target.classList.contains('card-input')) {
+                    handleCardChange(e);
+                }
+            });
+            
+            cardsContainer.addEventListener('click', (e) => {
+                if (e.target.closest('.remove-card-btn')) {
+                    handleRemoveCard(e);
+                }
+            });
+            
+            // --- Delete Logic ---
+            if (isEditing) {
+                const deleteBtn = document.getElementById('delete-set-btn');
+                const modal = document.getElementById('delete-confirm-modal');
+                const cancelBtn = document.getElementById('cancel-delete-btn');
+                const confirmBtn = document.getElementById('confirm-delete-btn');
+                
+                deleteBtn.addEventListener('click', () => modal.classList.remove('hidden'));
+                cancelBtn.addEventListener('click', () => modal.classList.add('hidden'));
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) modal.classList.add('hidden');
+                });
+                
+                confirmBtn.addEventListener('click', async () => {
+                    confirmBtn.disabled = true;
+                    confirmBtn.textContent = 'Deleting...';
+                    try {
+                        const docRef = doc(db, "studySets", setId);
+                        await deleteDoc(docRef);
+                        navigate('dashboard');
+                    } catch (err) {
+                        console.error("Error deleting set:", err);
+                        errorEl.textContent = "Failed to delete set: " + err.message;
+                        confirmBtn.disabled = false;
+                        confirmBtn.textContent = 'Delete';
+                        modal.classList.add('hidden');
+                    }
+                });
+            }
+
+            // --- Load Data (if editing) ---
+            if (isEditing) {
+                loadingEl.classList.remove('hidden');
+                contentEl.classList.add('hidden');
+                
+                const fetchSet = async () => {
+                    try {
+                        const docRef = doc(db, "studySets", setId);
+                        const docSnap = await getDoc(docRef);
+                        if (docSnap.exists()) {
+                            const data = docSnap.data();
+                            if (data.ownerId !== globalUser.uid) {
+                                errorEl.textContent = "You don't have permission to edit this set.";
+                                saveBtn.disabled = true;
+                                return;
+                            }
+                            titleEl.value = data.title;
+                            descriptionEl.value = data.description || '';
+                            if (data.isPublic) toggleVisibility();
+                            cards = data.cards.length > 0 ? data.cards : [{ term: '', definition: '' }];
+                            renderCards();
+                        } else {
+                            errorEl.textContent = "Study set not found.";
+                            saveBtn.disabled = true;
+                        }
+                    } catch (err) {
+                        console.error("Error fetching set:", err);
+                        errorEl.textContent = "Failed to load study set.";
+                    } finally {
+                        loadingEl.classList.add('hidden');
+                        contentEl.classList.remove('hidden');
+                    }
+                };
+                fetchSet();
+            } else {
+                renderCards(); // Render the initial empty card
+            }
+        }
+        
+        // --- Upload/Import Page ---
+        function UploadPageHTML() {
+            return `
+                <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-2xl mx-auto">
+                    <div class="text-center">
+                        ${IconAI().replace('w-6 h-6', 'mx-auto h-16 w-16 text-blue-600 dark:text-blue-500')}
+                        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mt-4 mb-4">Import & Auto-Create</h1>
+                        <p class="text-lg text-gray-600 dark:text-gray-300 mb-8">
+                            Upload a \`.pdf\` or \`.txt\` file and our AI will
+                            automatically create flashcards for you.
+                        </p>
+                    </div>
+
+                    <div class="p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-center">
+                        <label for="file-upload" 
+                            class="cursor-pointer inline-flex items-center px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            ${IconUpload()}
+                            <span id="file-upload-text" class="ml-2">Select a file</span>
+                        </label>
+                        <input id="file-upload" name="file-upload" type="file" class="sr-only" accept=".pdf,.txt">
+                        <p id="file-name" class="mt-4 text-sm text-gray-600 dark:text-gray-400"></p>
+                    </div>
+                    
+                    <!-- Progress bar -->
+                    <div id="upload-progress-container" class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-6 hidden">
+                        <div id="upload-progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    
+                    <button
+                      id="upload-btn"
+                      disabled
+                      class="w-full mt-8 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Generate Flashcards
+                    </button>
+                    
+                    <div id="upload-message" class="mt-4 text-sm text-center"></div>
+                    
+                    <div class="mt-8 p-4 bg-blue-50 dark:bg-gray-700/50 border border-blue-200 dark:border-gray-700 rounded-lg text-left">
+                        <h4 class="font-semibold text-blue-800 dark:text-blue-300">How this works:</h4>
+                        <ol class="list-decimal list-inside text-sm text-blue-700 dark:text-blue-300 mt-2 space-y-1">
+                            <li>You pick a \`.pdf\` or \`.txt\` file.</li>
+                            <li>Your browser reads the file (it's not uploaded).</li>
+                            <li>The text is sent to the Google Gemini AI.</li>
+                            <li>The AI creates your flashcards and saves them as a new, private set in your account.</li>
+                        </ol>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachUploadListeners() {
+            const fileInput = document.getElementById('file-upload');
+            const uploadBtn = document.getElementById('upload-btn');
+            const fileUploadText = document.getElementById('file-upload-text');
+            const fileNameEl = document.getElementById('file-name');
+            const messageEl = document.getElementById('upload-message');
+            const progressContainer = document.getElementById('upload-progress-container');
+            const progressBar = document.getElementById('upload-progress-bar');
+
+            let file = null;
+
+            fileInput.addEventListener('change', (e) => {
+                file = e.target.files[0];
+                if (file) {
+                    fileUploadText.textContent = 'Change file';
+                    fileNameEl.textContent = `Selected: ${file.name}`;
+                    uploadBtn.disabled = false;
+                    messageEl.textContent = '';
+                } else {
+                    fileUploadText.textContent = 'Select a file';
+                    fileNameEl.textContent = '';
+                    uploadBtn.disabled = true;
+                }
+            });
+
+            uploadBtn.addEventListener('click', async () => {
+                if (!file) return;
+
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Generating...';
+                messageEl.textContent = 'Reading file...';
+                progressContainer.classList.remove('hidden');
+                progressBar.style.width = '0%';
+
+                try {
+                    let text = '';
+                    if (file.type === 'application/pdf') {
+                        messageEl.textContent = 'Reading PDF... (this may take a moment)';
+                        progressBar.style.width = '10%';
+                        text = await readPdf(file);
+                    } else {
+                        messageEl.textContent = 'Reading text file...';
+                        progressBar.style.width = '10%';
+                        text = await readFile(file);
+                    }
+                    
+                    messageEl.textContent = 'File read! Contacting AI...';
+                    progressBar.style.width = '25%';
+
+                    const { title, cards } = await getAICards(text, file.name);
+                    
+                    messageEl.textContent = 'AI complete! Saving set...';
+                    progressBar.style.width = '80%';
+
+                    const setData = {
+                        title: title,
+                        description: `Generated by AI from ${file.name}`,
+                        isPublic: false,
+                        ownerId: globalUser.uid,
+                        ownerEmail: globalUser.email,
+                        cards: cards,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp(),
+                    };
+
+                    await addDoc(collection(db, "studySets"), setData);
+                    
+                    progressBar.style.width = '100%';
+                    messageEl.textContent = 'Success! Your new set is on the dashboard.';
+                    messageEl.className = 'mt-4 text-sm text-center text-green-600 dark:text-green-400';
+
+                    setTimeout(() => {
+                        navigate('dashboard');
+                    }, 2000);
+
+                } catch (error) {
+                    console.error('Upload process failed:', error);
+                    messageEl.textContent = `Error: ${error.message}`;
+                    messageEl.className = 'mt-4 text-sm text-center text-red-600 dark:text-red-400';
+                    uploadBtn.disabled = false;
+                    uploadBtn.textContent = 'Generate Flashcards';
+                    progressContainer.classList.add('hidden');
+                }
+            });
+        }
+        
+        // --- File Readers ---
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file.'));
+                reader.readAsText(file);
+            });
+        }
+
+        async function readPdf(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const pdf = await pdfjsLib.getDocument({ data }).promise;
+                        let allText = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            allText += textContent.items.map(item => item.str).join(' ') + '\n';
+                        }
+                        resolve(allText);
+                    } catch (error) {
+                        reject(new Error('Failed to parse PDF: ' + error.message));
+                    }
+                };
+                reader.onerror = (e) => reject(new Error('Failed to read file.'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- AI: GET CARDS ---
+        async function getAICards(text, fileName) {
+            const prompt = `
+                You are an expert in education and study. Analyze the following text and generate a list of flashcard terms and definitions.
+                The text is from a file named "${fileName}".
+                
+                RULES:
+                1.  Generate a suitable, short title for the study set based on the text.
+                2.  Generate between 10 and 50 flashcards.
+                3.  Focus on key concepts, vocabulary, and important facts.
+                4.  Terms and definitions should be concise and clear.
+                5.  Return ONLY a single JSON object. Do not include any other text, greetings, or markdown formatting.
+                
+                JSON FORMAT:
+                {
+                  "title": "Your Generated Title",
+                  "cards": [
+                    { "term": "Term 1", "definition": "Definition 1" },
+                    { "term": "Term 2", "definition": "Definition 2" }
+                  ]
+                }
+                
+                ---
+                TEXT TO ANALYZE:
+                ${text.substring(0, 30000)} 
+                ---
+            `;
+            
+            if (!GEMINI_API_KEY) {
+                throw new Error("GEMINI_API_KEY is not set. Cannot call AI.");
+            }
+            
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    title: { type: "STRING" },
+                                    cards: {
+                                        type: "ARRAY",
+                                        items: {
+                                            type: "OBJECT",
+                                            properties: {
+                                                term: { type: "STRING" },
+                                                definition: { type: "STRING" }
+                                            },
+                                            required: ["term", "definition"]
+                                        }
+                                    }
+                                },
+                                required: ["title", "cards"]
+                            },
+                            temperature: 0.5,
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("AI API Error:", errorData);
+                    throw new Error(errorData.error?.message || "Failed to call AI model.");
+                }
+
+                const data = await response.json();
+                
+                if (!data.candidates || data.candidates.length === 0) {
+                    throw new Error("Received an invalid response from the AI (no candidates).");
+                }
+                
+                const jsonText = data.candidates[0]?.content?.parts[0]?.text;
+
+                if (!jsonText) {
+                    throw new Error("Received an empty response from the AI.");
+                }
+
+                // Parse the JSON text
+                const result = JSON.parse(jsonText);
+                
+                if (!result.title || !result.cards) {
+                    throw new Error("AI response is missing title or cards.");
+                }
+                
+                return result; // Should be { title: "...", cards: [...] }
+
+            } catch (error) {
+                console.error('Error getting AI cards:', error);
+                throw new Error(`Failed to process AI response: ${error.message}`);
+            }
+        }
+        
+        // --- AI: GET HINT ---
+        async function getAIHint(term, definition) {
+            const modalContent = document.getElementById('ai-hint-content');
+            modalContent.innerHTML = `
+                <div class="flex items-center justify-center h-24">
+                    <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="ml-3 dark:text-gray-200">Generating hint...</p>
+                </div>
+            `;
+            
+            const prompt = `
+                You are a helpful study assistant. A student is studying a flashcard.
+                The term is: "${term}"
+                The definition is: "${definition}"
+                
+                Please provide a very short and simple (1-2 sentences) hint, memory trick, or example sentence for this concept.
+                Do not just repeat the definition.
+            `;
+            
+            if (!GEMINI_API_KEY) {
+                modalContent.innerHTML = `<p class="text-red-500">Error: GEMINI_API_KEY is not set.</p>`;
+                return;
+            }
+            
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+            
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: {
+                            temperature: 0.7,
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("AI API Error:", errorData);
+                    throw new Error(errorData.error?.message || "Failed to call AI model.");
+                }
+
+                const data = await response.json();
+                
+                if (!data.candidates || data.candidates.length === 0) {
+                    throw new Error("Received an invalid response from the AI (no candidates).");
+                }
+                
+                const text = data.candidates[0]?.content?.parts[0]?.text;
+
+                if (!text) {
+                    throw new Error("Received an empty response from the AI.");
+                }
+                
+                // Format text (simple markdown to HTML)
+                const formattedText = text
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // bold
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>') // italic
+                    .replace(/\n/g, '<br>'); // newlines
+
+                modalContent.innerHTML = `<p>${formattedText}</p>`;
+
+            } catch (error) {
+                console.error('Error getting AI hint:', error);
+                modalContent.innerHTML = `<p class="text-red-500">Error: Could not generate hint. ${error.message}</p>`;
+            }
+        }
+        
+        // --- Quiz Page ---
+        function QuizPageHTML(setId) {
+            return `
+                <button id="quiz-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
+                    ${IconBack()} <span class="ml-1">Back to Dashboard</span>
+                </button>
+                <div id="quiz-page-content">
+                    <div class="text-center p-12">
+                        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-4 text-gray-600 dark:text-gray-300">Loading quiz...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachQuizListeners(setId) {
+            const pageContent = document.getElementById('quiz-page-content');
+            document.getElementById('quiz-back-btn').addEventListener('click', () => navigate('dashboard'));
+            
+            let questions = []; // This will hold { prompt, options: [text, text...], correctIndex }
+            let currentQuestionIndex = 0;
+            let score = 0;
+            let data;
+            
+            const launchConfetti = () => {
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            };
+
+            const generateQuiz = () => {
+                questions = [];
+                // Shuffle cards to get random questions
+                const shuffledCards = [...data.cards].sort(() => 0.5 - Math.random());
+                
+                for (const card of shuffledCards) {
+                    // Create one question for this card
+                    const prompt = card.definition;
+                    const correctAnswer = card.term;
+                    
+                    // Get 3 wrong answers
+                    const wrongAnswers = data.cards
+                        .filter(c => c.term !== correctAnswer) // Not the right answer
+                        .sort(() => 0.5 - Math.random()) // Shuffle
+                        .slice(0, 3) // Get 3
+                        .map(c => c.term);
+                        
+                    if (wrongAnswers.length < 3) {
+                        // Not enough cards to make a quiz, should have been caught earlier
+                        continue; 
+                    }
+                    
+                    const options = [correctAnswer, ...wrongAnswers].sort(() => 0.5 - Math.random());
+                    const correctIndex = options.findIndex(opt => opt === correctAnswer);
+                    
+                    questions.push({ prompt, options, correctIndex });
+                }
+                
+                currentQuestionIndex = 0;
+                score = 0;
+                renderQuestion();
+            };
+            
+            const renderQuestion = () => {
+                if (currentQuestionIndex >= questions.length) {
+                    renderQuizResults();
+                    return;
+                }
+                
+                const q = questions[currentQuestionIndex];
+                const progressPercent = ((currentQuestionIndex) / questions.length) * 100;
+
+                pageContent.innerHTML = `
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2 truncate" title="${data.title}">Quiz: ${data.title}</h1>
+                    <p class="text-lg text-gray-600 dark:text-gray-400 mb-6">Question ${currentQuestionIndex + 1} of ${questions.length}</p>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mb-6">
+                        <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progressPercent}%"></div>
+                    </div>
+                    
+                    <!-- Question Prompt -->
+                    <div class="w-full min-h-[10rem] bg-white dark:bg-gray-800 rounded-lg shadow-xl flex items-center justify-center p-6 mb-8">
+                        <p class="text-2xl font-medium text-gray-800 dark:text-gray-200 text-center">${q.prompt}</p>
+                    </div>
+                    
+                    <!-- Answer Options -->
+                    <div id="quiz-options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${q.options.map((option, index) => `
+                            <button data-index="${index}" class="quiz-option-btn w-full text-left p-4 rounded-lg bg-white dark:bg-gray-800 shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                <span class="text-base font-medium text-gray-900 dark:text-white">${String.fromCharCode(65 + index)}.</span>
+                                <span class="ml-3 text-gray-800 dark:text-gray-200">${option}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    
+                    <div id="quiz-feedback" class="mt-6"></div>
+                `;
+                
+                // Attach listeners to new buttons
+                document.querySelectorAll('.quiz-option-btn').forEach(btn => {
+                    btn.addEventListener('click', handleAnswer);
+                });
+            };
+            
+            const handleAnswer = (e) => {
+                const btn = e.currentTarget;
+                const selectedIndex = parseInt(btn.dataset.index);
+                const q = questions[currentQuestionIndex];
+                const isCorrect = selectedIndex === q.correctIndex;
+                
+                // Disable all buttons
+                document.querySelectorAll('.quiz-option-btn').forEach(b => {
+                    b.disabled = true;
+                    b.classList.remove('hover:bg-gray-100', 'dark:hover:bg-gray-700');
+                });
+                
+                // Show feedback
+                const feedbackEl = document.getElementById('quiz-feedback');
+                if (isCorrect) {
+                    score++;
+                    btn.classList.add('bg-green-100', 'dark:bg-green-900', 'border-green-500');
+                    feedbackEl.innerHTML = `
+                        <p class="text-center text-lg font-semibold text-green-600 dark:text-green-400">Correct!</p>
+                    `;
+                } else {
+                    btn.classList.add('bg-red-100', 'dark:bg-red-900', 'border-red-500');
+                    // Highlight correct answer
+                    document.querySelector(`.quiz-option-btn[data-index="${q.correctIndex}"]`).classList.add('bg-green-100', 'dark:bg-green-900');
+                    feedbackEl.innerHTML = `
+                        <p class="text-center text-lg font-semibold text-red-600 dark:text-red-400">Incorrect. The correct answer was: <strong>${q.options[q.correctIndex]}</strong></p>
+                    `;
+                }
+                
+                // Go to next question after a delay
+                setTimeout(() => {
+                    currentQuestionIndex++;
+                    renderQuestion();
+                }, 2000);
+            };
+            
+            const renderQuizResults = () => {
+                const percentage = Math.round((score / questions.length) * 100);
+                
+                pageContent.innerHTML = `
+                    <div class="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Quiz Complete!</h3>
+                        <p class="mt-4 text-4xl font-bold ${percentage >= 80 ? 'text-green-600 dark:text-green-400' : (percentage >= 50 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400')}">
+                            ${percentage}%
+                        </p>
+                        <p class="mt-2 text-lg text-gray-600 dark:text-gray-300">
+                            You got ${score} out of ${questions.length} correct.
+                        </p>
+                        <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                            <button id="quiz-restart-btn" class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700">
+                                Try Again
+                            </button>
+                            <button id="quiz-back-btn-2" class="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                if (percentage === 100) {
+                    launchConfetti();
+                }
+                
+                document.getElementById('quiz-restart-btn').addEventListener('click', generateQuiz);
+                document.getElementById('quiz-back-btn-2').addEventListener('click', () => navigate('dashboard'));
+            };
+            
+            // --- Load Set Data ---
+            const loadSet = async () => {
+                try {
+                    const docRef = doc(db, "studySets", setId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        data = docSnap.data();
+                        if (!data.cards || data.cards.length < 4) {
+                            pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">This set needs at least 4 cards to make a quiz.</p>`;
+                            return;
+                        }
+                        generateQuiz();
+                    } else {
+                        pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Study set not found.</p>`;
+                    }
+                } catch (err) {
+                    console.error("Error fetching set:", err);
+                    pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Failed to load quiz.</p>`;
+                }
+            };
+            
+            loadSet();
+        }
+        
+        // --- Learn Setup Page ---
+        function LearnSetupPageHTML(setId) {
+            return `
+                <button id="learn-setup-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline mb-4">
+                    ${IconBack()} <span class="ml-1">Back to Dashboard</span>
+                </button>
+                <div id="learn-setup-content" class="max-w-xl mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Learn Mode Setup</h1>
+                    
+                    <!-- Loading placeholder -->
+                    <div id="learn-setup-loader" class="text-center p-12 hidden">
+                        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-4 text-gray-600 dark:text-gray-300">Loading set info...</p>
+                    </div>
+
+                    <!-- Setup Form -->
+                    <form id="learn-setup-form" class="space-y-6">
+                        <h2 id="learn-set-title" class="text-xl font-semibold text-gray-800 dark:text-white">...</h2>
+                        
+                        <!-- Session Size -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Session Size</label>
+                            <select id="learn-session-size" class="w-full mt-1 p-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md">
+                                <option value="10">10 Cards</option>
+                                <option value="20">20 Cards</option>
+                                <option value="all">All Cards</option>
+                            </select>
+                            <p id="learn-size-helper" class="text-xs text-gray-500 dark:text-gray-400 mt-1">...</p>
+                        </div>
+                        
+                        <!-- Question Types -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Question Types</label>
+                            <div class="mt-2 space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="learn-type-mc" value="mc" checked class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300">Multiple Choice</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="learn-type-typed" value="typed" checked class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300">Typed Answer</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Prompt With -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Prompt With</label>
+                            <div class="mt-2 flex gap-4">
+                                <label class="flex items-center">
+                                    <input type="radio" name="learn-prompt" id="learn-prompt-term" value="term" checked class="h-4 w-4 text-blue-600 border-gray-300">
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300">Term</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="learn-prompt" id="learn-prompt-def" value="definition" class="h-4 w-4 text-blue-600 border-gray-300">
+                                    <span class="ml-2 text-gray-700 dark:text-gray-300">Definition</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="learn-setup-error" class="text-red-600 dark:text-red-400"></div>
+
+                        <button type="submit" id="start-learn-btn" class="w-full px-6 py-3 text-base font-medium text-white bg-purple-600 rounded-md hover:bg-purple-700">
+                            Start Learning
+                        </button>
+                    </form>
+                </div>
+            `;
+        }
+
+        function attachLearnSetupListeners(setId) {
+            document.getElementById('learn-setup-back-btn').addEventListener('click', () => navigate('dashboard'));
+
+            const form = document.getElementById('learn-setup-form');
+            const loader = document.getElementById('learn-setup-loader');
+            const titleEl = document.getElementById('learn-set-title');
+            const sizeSelect = document.getElementById('learn-session-size');
+            const sizeHelper = document.getElementById('learn-size-helper');
+            const typeMC = document.getElementById('learn-type-mc');
+            const typeTyped = document.getElementById('learn-type-typed');
+            const errorEl = document.getElementById('learn-setup-error');
+
+            let cardCount = 0;
+
+            // Load set info
+            const loadSetInfo = async () => {
+                form.classList.add('hidden');
+                loader.classList.remove('hidden');
+                try {
+                    const docRef = doc(db, "studySets", setId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        cardCount = data.cards ? data.cards.length : 0;
+                        titleEl.textContent = `Set: ${data.title}`;
+                        sizeHelper.textContent = `This set has ${cardCount} cards.`;
+                        
+                        // Adjust size options based on card count
+                        sizeSelect.querySelector('option[value="10"]').disabled = cardCount < 10;
+                        sizeSelect.querySelector('option[value="20"]').disabled = cardCount < 20;
+                        if(cardCount < 10) sizeSelect.value = 'all';
+                        
+                    } else {
+                        errorEl.textContent = "Study set not found.";
+                    }
+                } catch (err) {
+                    errorEl.textContent = "Failed to load set: " + err.message;
+                } finally {
+                    form.classList.remove('hidden');
+                    loader.classList.add('hidden');
+                }
+            };
+            
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                errorEl.textContent = '';
+                
+                if (!typeMC.checked && !typeTyped.checked) {
+                    errorEl.textContent = "Please select at least one question type.";
+                    return;
+                }
+                
+                let size = sizeSelect.value === 'all' ? cardCount : parseInt(sizeSelect.value);
+                if (size > cardCount) size = cardCount;
+                
+                learnSettings = {
+                    setId,
+                    size,
+                    totalCards: cardCount,
+                    types: {
+                        mc: typeMC.checked,
+                        typed: typeTyped.checked,
+                    },
+                    promptWith: document.getElementById('learn-prompt-term').checked ? 'term' : 'definition'
+                };
+                
+                navigate('learn', setId);
+            });
+            
+            loadSetInfo();
+        }
+
+        // --- Learn Page ---
+        function LearnPageHTML(setId) {
+            return `
+                <div class="flex justify-between items-center mb-4">
+                    <button id="learn-back-btn" class="flex items-center text-blue-600 dark:text-blue-400 hover:underline">
+                        ${IconBack()} <span class="ml-1">Stop Learning</span>
+                    </button>
+                    <!-- Progress text will be added by listener -->
+                    <div id="learn-progress-text" class="text-lg font-semibold text-gray-700 dark:text-gray-200">...</div>
+                </div>
+                <div id="learn-page-content">
+                    <div class="text-center p-12">
+                        <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p class="mt-4 text-gray-600 dark:text-gray-300">Building your session...</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function attachLearnListeners(setId) {
+            document.getElementById('learn-back-btn').addEventListener('click', () => navigate('dashboard'));
+            const pageContent = document.getElementById('learn-page-content');
+            const progressText = document.getElementById('learn-progress-text');
+            
+            let allCards = [];
+            let questionQueue = []; // Holds { card, type }
+            let masterList = new Map(); // cardIndex -> { correct: 0, incorrect: 0 }
+            let sessionSize = learnSettings.size;
+            
+            const launchConfetti = () => {
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            };
+            
+            const buildQueue = () => {
+                questionQueue = [];
+                // Get indices of all cards
+                let indices = Array.from(allCards.keys());
+                // Shuffle them
+                for (let i = indices.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [indices[i], indices[j]] = [indices[j], indices[i]];
+                }
+                // Take the requested size
+                indices = indices.slice(0, sessionSize);
+                
+                // Populate master list
+                masterList = new Map();
+                indices.forEach(index => {
+                    masterList.set(index, { correct: 0, incorrect: 0 });
+                });
+
+                // Build the first round of questions
+                indices.forEach(index => {
+                    questionQueue.push({ 
+                        cardIndex: index, 
+                        type: selectQuestionType() 
+                    });
+                });
+                
+                // Shuffle the initial queue
+                for (let i = questionQueue.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [questionQueue[i], questionQueue[j]] = [questionQueue[j], questionQueue[i]];
+                }
+            };
+            
+            const selectQuestionType = () => {
+                const { mc, typed } = learnSettings.types;
+                if (mc && typed) {
+                    return Math.random() < 0.5 ? 'mc' : 'typed';
+                }
+                return mc ? 'mc' : 'typed';
+            };
+            
+            const renderNextQuestion = () => {
+                updateProgressText();
+                
+                if (questionQueue.length === 0) {
+                    // Check if any cards need reviewing
+                    let needsReview = [];
+                    masterList.forEach((status, index) => {
+                        if (status.correct === 0 || status.incorrect > 0) {
+                            needsReview.push(index);
+                        }
+                    });
+                    
+                    if (needsReview.length === 0) {
+                        // Session Complete!
+                        renderLearnResults();
+                        return;
+                    }
+                    
+                    // Re-queue cards that need review
+                    needsReview.forEach(index => {
+                        // Reset incorrect count so it's not too punishing
+                        masterList.get(index).incorrect = 0; 
+                        questionQueue.push({
+                            cardIndex: index,
+                            type: selectQuestionType()
+                        });
+                    });
+                    
+                    // Shuffle the review queue
+                    for (let i = questionQueue.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [questionQueue[i], questionQueue[j]] = [questionQueue[j], questionQueue[i]];
+                    }
+                }
+                
+                const currentQuestion = questionQueue[0];
+                const card = allCards[currentQuestion.cardIndex];
+                
+                const [prompt, answer] = learnSettings.promptWith === 'term' 
+                    ? [card.term, card.definition]
+                    : [card.definition, card.term];
+                
+                if (currentQuestion.type === 'mc') {
+                    renderMCQuestion(card, prompt, answer);
+                } else {
+                    renderTypedQuestion(card, prompt, answer);
+                }
+            };
+            
+            const updateProgressText = () => {
+                let correctCount = 0;
+                masterList.forEach(status => {
+                    if (status.correct > 0) correctCount++;
+                });
+                progressText.textContent = `Mastered: ${correctCount} / ${masterList.size}`;
+            };
+            
+            const renderMCQuestion = (card, prompt, correctAnswer) => {
+                // Get 3 wrong answers
+                const wrongAnswers = allCards
+                    .filter(c => (learnSettings.promptWith === 'term' ? c.definition : c.term) !== correctAnswer)
+                    .sort(() => 0.5 - Math.random())
+                    .slice(0, 3)
+                    .map(c => learnSettings.promptWith === 'term' ? c.definition : c.term);
+                
+                // Ensure we have 3, even if set is small
+                while(wrongAnswers.length < 3) wrongAnswers.push(`Wrong Answer ${wrongAnswers.length + 1}`);
+
+                const options = [correctAnswer, ...wrongAnswers].sort(() => 0.5 - Math.random());
+                const correctIndex = options.findIndex(opt => opt === correctAnswer);
+                
+                pageContent.innerHTML = `
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Multiple Choice</p>
+                        <div class="w-full min-h-[8rem] flex items-center justify-center p-4 mb-6">
+                            <p class="text-2xl font-medium text-gray-800 dark:text-gray-200 text-center">${prompt}</p>
+                        </div>
+                        <div id="learn-options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${options.map((option, index) => `
+                                <button data-index="${index}" class="learn-option-btn w-full text-left p-4 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
+                                    <span class="text-gray-800 dark:text-gray-200">${option}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                        <div id="learn-feedback" class="mt-6"></div>
+                    </div>
+                `;
+                
+                document.querySelectorAll('.learn-option-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => handleAnswerMC(e, correctIndex, correctAnswer));
+                });
+            };
+            
+            const handleAnswerMC = (e, correctIndex, correctAnswer) => {
+                const btn = e.currentTarget;
+                const selectedIndex = parseInt(btn.dataset.index);
+                const isCorrect = selectedIndex === correctIndex;
+                
+                document.querySelectorAll('.learn-option-btn').forEach(b => { b.disabled = true; });
+                
+                const feedbackEl = document.getElementById('learn-feedback');
+                const { cardIndex } = questionQueue[0];
+
+                if (isCorrect) {
+                    masterList.get(cardIndex).correct++;
+                    btn.classList.add('bg-green-100', 'dark:bg-green-900', 'border-green-500');
+                    feedbackEl.innerHTML = `
+                        <p class="text-center text-lg font-semibold text-green-600 dark:text-green-400">Correct!</p>
+                        <button id="learn-next-btn" class="w-full mt-4 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Continue</button>
+                    `;
+                } else {
+                    masterList.get(cardIndex).incorrect++;
+                    btn.classList.add('bg-red-100', 'dark:bg-red-900', 'border-red-500');
+                    document.querySelector(`.learn-option-btn[data-index="${correctIndex}"]`).classList.add('bg-green-100', 'dark:bg-green-900');
+                    feedbackEl.innerHTML = `
+                        <p class="text-center text-lg font-semibold text-red-600 dark:text-red-400">Not quite. The correct answer was:</p>
+                        <p class="text-center text-lg font-medium text-gray-900 dark:text-white mt-2">${correctAnswer}</p>
+                        <button id="learn-next-btn" class="w-full mt-4 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Continue</button>
+                    `;
+                }
+                
+                questionQueue.shift(); // Remove from queue
+                document.getElementById('learn-next-btn').addEventListener('click', renderNextQuestion);
+            };
+
+            const renderTypedQuestion = (card, prompt, answer) => {
+                pageContent.innerHTML = `
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6">
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Typed Answer</p>
+                        <div class="w-full min-h-[8rem] flex items-center justify-center p-4 mb-6">
+                            <p class="text-2xl font-medium text-gray-800 dark:text-gray-200 text-center">${prompt}</p>
+                        </div>
+                        <form id="learn-typed-form">
+                            <input type="text" id="learn-typed-input"
+                                class="w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="Type your answer...">
+                            <button type="submit" id="learn-submit-typed" class="w-full mt-4 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                                Check
+                            </button>
+                        </form>
+                        <div id="learn-feedback" class="mt-6"></div>
+                    </div>
+                `;
+                
+                document.getElementById('learn-typed-form').addEventListener('submit', (e) => handleAnswerTyped(e, answer));
+            };
+            
+            const handleAnswerTyped = (e, correctAnswer) => {
+                e.preventDefault();
+                const inputEl = document.getElementById('learn-typed-input');
+                const typedAnswer = inputEl.value.trim();
+                
+                // Simple normalization for checking
+                const isCorrect = typedAnswer.toLowerCase() === correctAnswer.toLowerCase();
+                
+                const feedbackEl = document.getElementById('learn-feedback');
+                const { cardIndex } = questionQueue[0];
+                
+                document.getElementById('learn-submit-typed').classList.add('hidden');
+                inputEl.disabled = true;
+
+                if (isCorrect) {
+                    masterList.get(cardIndex).correct++;
+                    inputEl.classList.add('bg-green-100', 'dark:bg-green-900', 'border-green-500');
+                    feedbackEl.innerHTML = `
+                        <p class="text-center text-lg font-semibold text-green-600 dark:text-green-400">Correct!</p>
+                        <button id="learn-next-btn" class="w-full mt-4 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Continue</button>
+                    `;
+                } else {
+                    masterList.get(cardIndex).incorrect++;
+                    inputEl.classList.add('bg-red-100', 'dark:bg-red-900', 'border-red-500');
+                    feedbackEl.innerHTML = `
+                        <p class="text-center text-lg font-semibold text-red-600 dark:text-red-400">Incorrect</p>
+                        <p class="text-center text-gray-700 dark:text-gray-300 mt-2">Your answer: <span class="line-through">${typedAnswer || '...'}</span></p>
+                        <p class="text-center text-gray-700 dark:text-gray-300 mt-1">Correct answer: <strong class="text-green-700 dark:text-green-400">${correctAnswer}</strong></p>
+                        <button id="learn-next-btn" class="w-full mt-4 px-6 py-3 text-base font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">Continue</button>
+                    `;
+                }
+                
+                questionQueue.shift(); // Remove from queue
+                document.getElementById('learn-next-btn').addEventListener('click', renderNextQuestion);
+            };
+            
+            const renderLearnResults = () => {
+                launchConfetti();
+                progressText.textContent = `Mastered: ${masterList.size} / ${masterList.size}`;
+                
+                pageContent.innerHTML = `
+                    <div class="text-center p-8 bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+                        <h3 class="text-2xl font-bold text-gray-900 dark:text-white">Session Complete!</h3>
+                        <p class="mt-4 text-4xl font-bold text-green-600 dark:text-green-400">
+                            You mastered ${masterList.size} cards!
+                        </p>
+                        <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
+                            <button id="learn-restart-btn" class="px-6 py-3 bg-blue-600 border border-transparent rounded-md text-base font-medium text-white hover:bg-blue-700">
+                                Learn Again
+                            </button>
+                            <button id="learn-back-btn-2" class="px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                Back to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('learn-restart-btn').addEventListener('click', () => {
+                    // Go back to setup
+                    navigate('learnSetup', setId);
+                });
+                document.getElementById('learn-back-btn-2').addEventListener('click', () => navigate('dashboard'));
+            };
+            
+            // --- Load Set Data ---
+            const loadSet = async () => {
+                try {
+                    const docRef = doc(db, "studySets", setId);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        allCards = docSnap.data().cards;
+                        if (!allCards || allCards.length === 0) {
+                            pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">This set has no cards.</p>`;
+                            return;
+                        }
+                        
+                        // Check if set is too small for MC
+                        if (allCards.length < 4 && learnSettings.types.mc) {
+                             learnSettings.types.mc = false;
+                             learnSettings.types.typed = true;
+                             // We could show a warning here
+                        }
+                        
+                        buildQueue();
+                        renderNextQuestion();
+                    } else {
+                        pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Study set not found.</p>`;
+                    }
+                } catch (err) {
+                    console.error("Error fetching set:", err);
+                    pageContent.innerHTML = `<p class="text-red-600 dark:text-red-400">Failed to load session.</p>`;
+                }
+            };
+            
+            loadSet();
+        }
+
+
+        // --- AUTHENTICATION ---
+        // Listen for auth state changes
+        onAuthStateChanged(auth, (user) => {
+            console.log("Auth state changed, user:", user ? user.uid : "null");
+            globalUser = user;
+            globalAuthLoaded = true;
+            
+            // Determine the page to render
+            if (user) {
+                // User is signed in
+                if (currentPage === 'auth') {
+                    navigate('dashboard');
+                } else {
+                    render(); // Re-render current page
+                }
+            } else {
+                // User is signed out
+                navigate('auth');
+            }
+        });
+    </script>
 </body>
 </html>
+
+
