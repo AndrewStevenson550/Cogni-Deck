@@ -1,5 +1,12 @@
 # CogniDeck - Version History
 
+## [v4.1.1] - Multiple Files
+*Date 11/18/2025
+
+This update includes a techinical aspect of splitting up the index.html into multiple files. The new files are, "style.css" and "script.js". This was important becuase it is now more efficient to edit the files
+
+
+
 ## [v4.1.0] - AI Hint 
 *Date: 11/06/2025*
 
