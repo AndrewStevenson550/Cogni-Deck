@@ -1012,7 +1012,7 @@ a good hint would be "This organelle is famous for generating a lot of energy fo
 A bad hint would be "It's known as the 'powerhouse of the cell'."
 Your Hint:
 `;
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
